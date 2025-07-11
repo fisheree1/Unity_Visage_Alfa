@@ -10,14 +10,15 @@ public class HeroAttackController : MonoBehaviour
     [SerializeField] private float specialAttackDuration = 1.2f;
     
     [Header("Attack Cooldowns")]
-    [SerializeField] private float attackCooldown = 0.2f;
+    [SerializeField] private float attackCooldown = 0.1f;
     [SerializeField] private float upAttackCooldown = 0.8f;
     [SerializeField] private float downAttackCooldown = 0.8f;
-    [SerializeField] private float specialAttackCooldown = 3.0f;
+    [SerializeField] private float specialAttackCooldown = 0.2f;
     
     [Header("Combo Settings")]
     [SerializeField] private int maxComboCount = 3;
-    [SerializeField] private float comboResetTime = 2.0f;
+    [SerializeField] private float comboResetTime = 0.5f;
+    [SerializeField] private int maxSpecialComboCount = 3;
     
     // Components
     private Animator anim;
@@ -37,6 +38,7 @@ public class HeroAttackController : MonoBehaviour
     
     // Combo system
     private int comboCount = 0;
+    private int specialComboCount = 0;
     private float comboResetTimer = 0f;
     
     // Cooldown timers
@@ -89,7 +91,7 @@ public class HeroAttackController : MonoBehaviour
     
     private void UpdateComboTimer()
     {
-        if (comboCount > 0 && !isAttacking)
+        if ((comboCount > 0 || specialComboCount > 0) && !isAttacking)
         {
             comboResetTimer -= Time.deltaTime;
             if (comboResetTimer <= 0)
@@ -104,32 +106,29 @@ public class HeroAttackController : MonoBehaviour
         bool wPressed = Input.GetKey(KeyCode.W);
         bool sPressed = Input.GetKey(KeyCode.S);
         bool jPressed = Input.GetKeyDown(KeyCode.J);
+        bool uPressed = Input.GetKeyDown(KeyCode.U);
         
-        if (!jPressed) return;
+        if (!jPressed && !uPressed) return;
         
-        
+        // 特殊攻击 - U键
+        if (uPressed && specialAttackTimer <= 0)
+        {
+            TriggerSpecialAttack();
+        }
         // 向上攻击 - W+J 在地面或梯子上
-        if (wPressed && !heroMovement.IsClimbing && upAttackTimer <= 0)
+        else if (jPressed && wPressed && !heroMovement.IsClimbing && upAttackTimer <= 0)
         {
             TriggerUpAttack();
         }
         // 向下攻击 - S+J 在空中
-        else if (sPressed && !heroMovement.IsGrounded() && downAttackTimer <= 0)
+        else if (jPressed && sPressed && !heroMovement.IsGrounded() && downAttackTimer <= 0)
         {
             TriggerDownAttack();
         }
-        // 普通攻击或特殊攻击 - 单独按J键
-        else if (!wPressed && !sPressed && attackTimer <= 0)
+        // 普通攻击 - 单独按J键
+        else if (jPressed && !wPressed && !sPressed && attackTimer <= 0)
         {
-            // 如果已经连击3次，下一次触发特殊攻击
-            if (comboCount >= maxComboCount && specialAttackTimer <= 0)
-            {
-                TriggerSpecialAttack();
-            }
-            else
-            {
-                TriggerBasicAttack();
-            }
+            TriggerBasicAttack();
         }
     }
     
@@ -144,7 +143,9 @@ public class HeroAttackController : MonoBehaviour
         comboCount++;
         comboResetTimer = comboResetTime;
         
+        // 设置动画参数
         anim.SetTrigger("Attack");
+        anim.SetInteger("AttackComboStep", comboCount);
         
         // 激活基础攻击碰撞盒
         if (basicAttackHitbox != null)
@@ -155,8 +156,10 @@ public class HeroAttackController : MonoBehaviour
         // 限制最大连击数
         if (comboCount >= maxComboCount)
         {
-            comboCount = maxComboCount;
+            comboCount = 0;
         }
+        
+        Debug.Log($"Basic Attack - Combo: {comboCount}");
                 
         StartCoroutine(AttackCoroutine(attackDuration));
     }
@@ -203,7 +206,13 @@ public class HeroAttackController : MonoBehaviour
         StopHorizontalMovement();
         specialAttackTimer = specialAttackCooldown;
         
+        // 增加特殊攻击连击数
+        specialComboCount++;
+        comboResetTimer = comboResetTime;
+        
+        // 设置动画参数
         anim.SetTrigger("SpecialAttack");
+        anim.SetInteger("AttackComboStep", specialComboCount);
         
         // 激活特殊攻击碰撞盒
         if (specialAttackHitbox != null)
@@ -211,8 +220,13 @@ public class HeroAttackController : MonoBehaviour
             StartCoroutine(ActivateHitboxTemporarily(specialAttackHitbox, 0.2f, 0.5f));
         }
         
-        // 重置连击数
-        ResetCombo();
+        // 限制最大连击数
+        if (specialComboCount >= maxSpecialComboCount)
+        {
+            specialComboCount = 0;
+        }
+        
+        Debug.Log($"Special Attack - Combo: {specialComboCount}");
         
         StartCoroutine(AttackCoroutine(specialAttackDuration));
     }
@@ -253,7 +267,12 @@ public class HeroAttackController : MonoBehaviour
     private void ResetCombo()
     {
         comboCount = 0;
+        specialComboCount = 0;
         comboResetTimer = 0f;
+        
+        // 重置动画参数
+        anim.SetInteger("AttackComboStep", 0);
+        
         Debug.Log("Combo reset!");
     }
     
@@ -267,6 +286,14 @@ public class HeroAttackController : MonoBehaviour
         Debug.Log($"Attack finished!");
     }
     
+    
+    // 供动画事件调用的函数
+    public void AttackOver()
+    {
+        isAttacking = false;
+        currentAttackType = AttackType.None;
+        Debug.Log("Attack finished via animation event!");
+    }
     
     // 公共方法供其他脚本调用
     public bool CanMove()

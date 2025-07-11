@@ -1,14 +1,12 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 
 public class HeroMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpForce = 10f;
+    [SerializeField] private float jumpForce = 12f;  // 增加跳跃力度配合新的重力系统
     [SerializeField] private float climbSpeed = 3f;
     [SerializeField] private float ladderDetectionDistance = 0.3f;
 
@@ -18,7 +16,7 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
 
     [Header("Double Jump Settings")]
-    [SerializeField] private float doubleJumpForce = 8f;
+    [SerializeField] private float doubleJumpForce = 10f;  // 调整双跳力度
     [SerializeField] private bool doubleJumpUnlocked = false;
 
     [Header("Slide Settings")]
@@ -31,15 +29,30 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private Vector2 slideSize = new Vector2(0.13f, 0.2f);
     [SerializeField] private Vector2 slideOffset = new Vector2(0f, -0.1f);
 
+    [Header("Better Jump Settings")]
+    [SerializeField] private float fallMultiplier = 4f;  // 下落时重力倍数
+    [SerializeField] private float lowJumpMultiplier = 2f;  // 松开跳跃键时重力倍数
+    [SerializeField] private float upwardJumpMultiplier = 1.2f;  // 向上跳跃时重力倍数（轻盈感）
+    [SerializeField] private float maxFallSpeed = -25f;  // 最大下落速度
+    [SerializeField] private float apexThreshold = 2f;  // 接近跳跃顶点的速度阈值
+
+    [Header("Coyote Time & Jump Buffer")]
+    [SerializeField] private float coyoteTime = 0.2f;
+    [SerializeField] private float jumpBufferTime = 0.15f;
+
+
+    [SerializeField] private float jumpCutMultiplier = 0.3f;  // 更强的跳跃切断效果
+
+
+    private float coyoteTimeCounter;
+    private float jumpBufferCounter;
 
     // Components
     private Rigidbody2D rb;
-    private SpriteRenderer spriteRenderer;
     private Animator anim;
     private HeroAttackController attackController;
     private HeroLife heroLife;
 
-    // Movement state
     private float dirx = 0f;
     private bool isOnLadder = false;
     private bool isClimbing = false;
@@ -51,9 +64,7 @@ public class HeroMovement : MonoBehaviour
     private Vector2 originalColliderSize;
     private Vector2 originalColliderOffset;
 
-    [field: SerializeField]
-    public bool isFacingRight { get; private set; } = true;
-
+    [field: SerializeField] public bool isFacingRight { get; private set; } = true;
     [field: SerializeField] private GameObject _cameraFollowObject;
 
     private enum MovementState
@@ -70,7 +81,6 @@ public class HeroMovement : MonoBehaviour
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        spriteRenderer = GetComponent<SpriteRenderer>();
         anim = GetComponent<Animator>();
         attackController = GetComponent<HeroAttackController>();
         heroLife = GetComponent<HeroLife>();
@@ -88,26 +98,14 @@ public class HeroMovement : MonoBehaviour
         dirx = Input.GetAxis("Horizontal");
         float diry = Input.GetAxis("Vertical");
 
-        bool wasJumping = isJumping;
-        bool currentlyGrounded = IsGrounded();
-
-        if (wasJumping && currentlyGrounded && rb.velocity.y <= 0.1f)
+        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0)
         {
-            isJumping = false;
-            hasDoubleJumped = false;
-            Debug.Log("Landed - isJumping reset to false, doubleJump reset");
+            rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * jumpCutMultiplier);
         }
 
-        if (rb.velocity.y < _fallSpeedYDampingChangeThreshold && !CameraManager.instance.IsLerpingYDamping && !CameraManager.instance.LerpedFromPlayerFalling)
-        {
-            CameraManager.instance.LerpYDamping(true);
-        }
 
-        if (rb.velocity.y >= 0f && !CameraManager.instance.IsLerpingYDamping && CameraManager.instance.LerpedFromPlayerFalling)
-        {
-            CameraManager.instance.LerpYDamping(false);
-            CameraManager.instance.LerpedFromPlayerFalling = false;
-        }
+        UpdateCoyoteTime();
+        UpdateJumpBuffer();
 
         HandleClimbing(diry);
         HandleHorizontalMovement();
@@ -115,6 +113,31 @@ public class HeroMovement : MonoBehaviour
         HandleSliding();
         HandleFacingDirection();
         UpdateAnimationState();
+        BetterJump();
+    }
+
+    private void UpdateCoyoteTime()
+    {
+        if (IsGrounded())
+        {
+            coyoteTimeCounter = coyoteTime;
+            // 着地时重置双跳状态
+            if (hasDoubleJumped)
+            {
+                hasDoubleJumped = false;
+                Debug.Log("Double jump reset - landed on ground");
+            }
+        }
+        else
+            coyoteTimeCounter -= Time.deltaTime;
+    }
+
+    private void UpdateJumpBuffer()
+    {
+        if (Input.GetButtonDown("Jump"))
+            jumpBufferCounter = jumpBufferTime;
+        else
+            jumpBufferCounter -= Time.deltaTime;
     }
 
     private void HandleHorizontalMovement()
@@ -123,30 +146,33 @@ public class HeroMovement : MonoBehaviour
         float speedMultiplier = attackController != null ? attackController.GetMovementSpeedMultiplier() : 1f;
 
         if (!isClimbing && canMove)
-        {
             rb.velocity = new Vector2(dirx * moveSpeed * speedMultiplier, rb.velocity.y);
-        }
     }
 
     private void HandleJump()
     {
         bool canJump = attackController == null || attackController.CanJump();
-        bool isGrounded = IsGrounded();
 
-        if (Input.GetButtonDown("Jump") && isGrounded && !isClimbing && !isJumping && canJump)
+        if (jumpBufferCounter > 0 && (coyoteTimeCounter > 0 || (doubleJumpUnlocked && !hasDoubleJumped)) && !isClimbing && canJump)
         {
-            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            // 检查是否是双跳
+            if (!IsGrounded() && !hasDoubleJumped && doubleJumpUnlocked)
+            {
+                hasDoubleJumped = true;
+                rb.velocity = new Vector2(rb.velocity.x, doubleJumpForce);
+                Debug.Log("Double jump triggered!");
+            }
+            else
+            {
+                rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+                Debug.Log("Normal jump triggered!");
+            }
+            
             isJumping = true;
-            hasDoubleJumped = false;
-            Debug.Log("Jump triggered!");
+            jumpBufferCounter = 0;
+            coyoteTimeCounter = 0;
         }
-        else if (Input.GetButtonDown("Jump") && !isGrounded && !isClimbing && !hasDoubleJumped && doubleJumpUnlocked && canJump)
-        {
-            rb.velocity = new Vector2(rb.velocity.x, doubleJumpForce);
-            hasDoubleJumped = true;
-            Debug.Log("Double Jump triggered!");
-        }
-        else if (Input.GetButtonDown("Jump") && isClimbing)
+        else if (jumpBufferCounter > 0 && isClimbing)
         {
             isClimbing = false;
             isOnLadder = false;
@@ -154,7 +180,9 @@ public class HeroMovement : MonoBehaviour
             rb.velocity = new Vector2(dirx * moveSpeed, jumpForce * 0.7f);
             isJumping = true;
             hasDoubleJumped = false;
-            Debug.Log("Jump off ladder!");
+
+            jumpBufferCounter = 0;
+            Debug.Log("Jumped off ladder!");
         }
     }
 
@@ -166,7 +194,7 @@ public class HeroMovement : MonoBehaviour
         if (isOnLadder && Mathf.Abs(verticalInput) > 0 && canClimb)
         {
             isClimbing = true;
-            rb.gravityScale = 0f;
+            rb.gravityScale = 0f;  // 爬梯时无重力
             rb.velocity = new Vector2(0, verticalInput * climbSpeed);
         }
         else if (isClimbing)
@@ -174,25 +202,18 @@ public class HeroMovement : MonoBehaviour
             if (!isOnLadder || !canClimb)
             {
                 isClimbing = false;
-                rb.gravityScale = 1f;
+                rb.gravityScale = 1f;  // 重置为基础重力，BetterJump会接管
             }
             else if (Mathf.Abs(verticalInput) == 0)
-            {
                 rb.velocity = new Vector2(0, 0);
-            }
         }
-        else
-        {
-            rb.gravityScale = 1f;
-        }
+        // 移除else分支，让BetterJump函数处理重力
     }
 
     private void HandleSliding()
     {
         if (slideUnlocked && Input.GetKeyDown(KeyCode.LeftShift) && !isSliding && IsGrounded())
-        {
             StartCoroutine(Slide());
-        }   
     }
 
     private void HandleFacingDirection()
@@ -229,13 +250,11 @@ public class HeroMovement : MonoBehaviour
         bool foundLadder = false;
 
         foreach (Collider2D col in colliders)
-        {
             if (col.gameObject.name.Contains("ClimbMap") || col.CompareTag("Ladder"))
             {
                 foundLadder = true;
                 break;
             }
-        }
 
         isOnLadder = foundLadder;
 
@@ -250,38 +269,61 @@ public class HeroMovement : MonoBehaviour
     {
         if (heroLife != null && heroLife.IsDead)
             return;
-        
 
         MovementState state;
+
         if (isSliding)
         {
-            state = MovementState.HeroRun; 
-            return; 
+            state = MovementState.HeroRun;
+            return;
         }
         else if (isClimbing)
-        {
             state = MovementState.HeroLadder;
-        }
         else if (IsGrounded())
-        {
-            // 在地面上，根据水平速度判断
             state = Mathf.Abs(dirx) > 0.1f ? MovementState.HeroRun : MovementState.HeroIdle;
-            isJumping = false; // 落地安全归零
-        }
         else
-        {
-            // 不在地面，根据 y 速度判断跳跃或下落
             state = rb.velocity.y > 0.1f ? MovementState.PlayerJump : MovementState.PlayerFall;
-        }
 
         anim.SetInteger("Movements", (int)state);
-
 
         if (state != lastState)
         {
             Debug.Log($"Movement State Changed: {lastState} → {state} (IsGrounded: {IsGrounded()}, Velocity.y: {rb.velocity.y:F2})");
             lastState = state;
         }
+    }
+
+    private void BetterJump()
+    {
+        // 空洞骑士风格的跳跃物理
+        if (rb.velocity.y < -apexThreshold)
+        {
+            // 快速下落
+            rb.gravityScale = fallMultiplier;
+        }
+        else if (rb.velocity.y > apexThreshold)
+        {
+            // 向上跳跃时 - 检查是否松开跳跃键
+            if (Input.GetButton("Jump"))
+            {
+                // 持续按住跳跃键 - 轻盈上升
+                rb.gravityScale = upwardJumpMultiplier;
+            }
+            else
+            {
+                // 松开跳跃键 - 快速到达顶点
+                rb.gravityScale = lowJumpMultiplier;
+            }
+        }
+        else
+        {
+            // 在跳跃顶点附近 - 短暂的漂浮感
+            rb.gravityScale = upwardJumpMultiplier * 0.8f;
+        }
+
+        // 限制最大下落速度
+        if (rb.velocity.y < maxFallSpeed)
+            rb.velocity = new Vector2(rb.velocity.x, maxFallSpeed);
     }
 
     private IEnumerator Slide()
@@ -292,8 +334,7 @@ public class HeroMovement : MonoBehaviour
         capsuleCollider.size = slideSize;
         capsuleCollider.offset = slideOffset;
 
-
-        anim.SetTrigger("Slide"); 
+        anim.SetTrigger("Slide");
 
         float elapsed = 0f;
         while (elapsed < slideDuration)
@@ -305,18 +346,14 @@ public class HeroMovement : MonoBehaviour
 
         capsuleCollider.size = originalColliderSize;
         capsuleCollider.offset = originalColliderOffset;
-
         rb.gravityScale = originalGravity;
         isSliding = false;
     }
-
-
 
     public bool IsGrounded()
     {
         return Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
     }
-
     public bool IsClimbing => isClimbing;
     public bool IsJumping => isJumping;
     public float GetVelocityY() => rb.velocity.y;
@@ -324,22 +361,7 @@ public class HeroMovement : MonoBehaviour
     public bool HasDoubleJumped => hasDoubleJumped;
     public bool IsDoubleJumpUnlocked => doubleJumpUnlocked;
 
-    public void UnlockDoubleJump()
-    {
-        doubleJumpUnlocked = true;
-        Debug.Log("Double Jump skill unlocked!");
-    }
-
-    public void LockDoubleJump()
-    {
-        doubleJumpUnlocked = false;
-        hasDoubleJumped = false;
-        Debug.Log("Double Jump skill locked!");
-    }
-
-    public void UnlockSlide()
-    {
-        slideUnlocked = true;
-        Debug.Log("Slide skill unlocked!");
-    }
+    public void UnlockDoubleJump() => doubleJumpUnlocked = true;
+    public void LockDoubleJump() { doubleJumpUnlocked = false; hasDoubleJumped = false; }
+    public void UnlockSlide() => slideUnlocked = true;
 }
