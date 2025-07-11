@@ -13,13 +13,24 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private float ladderDetectionDistance = 0.3f;
 
     [Header("Ground Detection")]
-    [SerializeField] private Transform groundCheck; // ✅ 新增
-    [SerializeField] private float groundCheckRadius = 0.15f; // ✅ 新增
-    [SerializeField] private LayerMask groundLayer; // ✅ 用于检测地面
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private float groundCheckRadius = 0.15f;
+    [SerializeField] private LayerMask groundLayer;
 
     [Header("Double Jump Settings")]
     [SerializeField] private float doubleJumpForce = 8f;
     [SerializeField] private bool doubleJumpUnlocked = false;
+
+    [Header("Slide Settings")]
+    [SerializeField] private float slideSpeed = 8f;
+    [SerializeField] private float slideDuration = 0.5f;
+    [SerializeField] private bool slideUnlocked = false;
+
+    [Header("Capsule Collider Settings")]
+    [SerializeField] private CapsuleCollider2D capsuleCollider;
+    [SerializeField] private Vector2 slideSize = new Vector2(0.13f, 0.2f);
+    [SerializeField] private Vector2 slideOffset = new Vector2(0f, -0.1f);
+
 
     // Components
     private Rigidbody2D rb;
@@ -33,8 +44,12 @@ public class HeroMovement : MonoBehaviour
     private bool isOnLadder = false;
     private bool isClimbing = false;
     private bool isJumping = false;
-    private bool hasDoubleJumped = false; 
+    private bool hasDoubleJumped = false;
+    private bool isSliding = false;
     private MovementState lastState = MovementState.HeroIdle;
+
+    private Vector2 originalColliderSize;
+    private Vector2 originalColliderOffset;
 
     [field: SerializeField]
     public bool isFacingRight { get; private set; } = true;
@@ -43,11 +58,11 @@ public class HeroMovement : MonoBehaviour
 
     private enum MovementState
     {
-        HeroIdle,    
-        HeroRun,     
-        PlayerJump,  
-        PlayerFall,  
-        HeroLadder   
+        HeroIdle,
+        HeroRun,
+        PlayerJump,
+        PlayerFall,
+        HeroLadder
     }
 
     private float _fallSpeedYDampingChangeThreshold;
@@ -59,6 +74,8 @@ public class HeroMovement : MonoBehaviour
         anim = GetComponent<Animator>();
         attackController = GetComponent<HeroAttackController>();
         heroLife = GetComponent<HeroLife>();
+        originalColliderSize = capsuleCollider.size;
+        originalColliderOffset = capsuleCollider.offset;
 
         _fallSpeedYDampingChangeThreshold = CameraManager.instance._fallSpeedYDampingChangeThreshold;
     }
@@ -95,7 +112,8 @@ public class HeroMovement : MonoBehaviour
         HandleClimbing(diry);
         HandleHorizontalMovement();
         HandleJump();
-        HandleFacingDirection(); 
+        HandleSliding();
+        HandleFacingDirection();
         UpdateAnimationState();
     }
 
@@ -169,6 +187,14 @@ public class HeroMovement : MonoBehaviour
         }
     }
 
+    private void HandleSliding()
+    {
+        if (slideUnlocked && Input.GetKeyDown(KeyCode.LeftShift) && !isSliding && IsGrounded())
+        {
+            StartCoroutine(Slide());
+        }   
+    }
+
     private void HandleFacingDirection()
     {
         if (Mathf.Abs(dirx) > 0.1f)
@@ -224,10 +250,15 @@ public class HeroMovement : MonoBehaviour
     {
         if (heroLife != null && heroLife.IsDead)
             return;
+        
 
         MovementState state;
-
-        if (isClimbing)
+        if (isSliding)
+        {
+            state = MovementState.HeroRun; 
+            return; 
+        }
+        else if (isClimbing)
         {
             state = MovementState.HeroLadder;
         }
@@ -245,12 +276,35 @@ public class HeroMovement : MonoBehaviour
 
         anim.SetInteger("Movements", (int)state);
 
+
         if (state != lastState)
         {
             Debug.Log($"Movement State Changed: {lastState} → {state} (IsGrounded: {IsGrounded()}, Velocity.y: {rb.velocity.y:F2})");
             lastState = state;
         }
     }
+
+    private IEnumerator Slide()
+    {
+        isSliding = true;
+        float originalGravity = rb.gravityScale;
+        rb.gravityScale = 0f;
+        capsuleCollider.size = slideSize;
+        capsuleCollider.offset = slideOffset;
+
+        rb.velocity = new Vector2(isFacingRight ? slideSpeed : -slideSpeed, 0f);
+
+        anim.SetTrigger("Slide"); 
+
+        yield return new WaitForSeconds(slideDuration);
+
+        capsuleCollider.size = originalColliderSize;
+        capsuleCollider.offset = originalColliderOffset;
+
+        rb.gravityScale = originalGravity;
+        isSliding = false;
+    }
+
 
 
     public bool IsGrounded()
@@ -276,5 +330,11 @@ public class HeroMovement : MonoBehaviour
         doubleJumpUnlocked = false;
         hasDoubleJumped = false;
         Debug.Log("Double Jump skill locked!");
+    }
+
+    public void UnlockSlide()
+    {
+        slideUnlocked = true;
+        Debug.Log("Slide skill unlocked!");
     }
 }
