@@ -22,8 +22,8 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private bool doubleJumpUnlocked = false;
 
     [Header("Slide Settings")]
-    [SerializeField] private float slideSpeed = 8f;
-    [SerializeField] private float slideDuration = 0.5f;
+    [SerializeField] private float slideSpeed = 16f;
+    [SerializeField] private float slideDuration = 1f;
     [SerializeField] private bool slideUnlocked = false;
 
     [Header("Capsule Collider Settings")]
@@ -292,11 +292,16 @@ public class HeroMovement : MonoBehaviour
         capsuleCollider.size = slideSize;
         capsuleCollider.offset = slideOffset;
 
-        rb.velocity = new Vector2(isFacingRight ? slideSpeed : -slideSpeed, 0f);
 
         anim.SetTrigger("Slide"); 
 
-        yield return new WaitForSeconds(slideDuration);
+        float elapsed = 0f;
+        while (elapsed < slideDuration)
+        {
+            rb.velocity = new Vector2(isFacingRight ? slideSpeed : -slideSpeed, 0f);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
 
         capsuleCollider.size = originalColliderSize;
         capsuleCollider.offset = originalColliderOffset;
