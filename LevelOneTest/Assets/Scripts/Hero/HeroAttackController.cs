@@ -105,10 +105,11 @@ public class HeroAttackController : MonoBehaviour
     
     private void HandleAttackInput()
     {
-        bool wPressed = Input.GetKey(KeyCode.W);
-        bool sPressed = Input.GetKey(KeyCode.S);
-        bool jPressed = Input.GetKeyDown(KeyCode.J);
-        bool uPressed = Input.GetKeyDown(KeyCode.U);
+        // 使用SettingMenu获取自定义按键绑定
+        bool wPressed = Input.GetKey(SettingMenu.GetKeyBinding("MoveUp"));
+        bool sPressed = Input.GetKey(SettingMenu.GetKeyBinding("MoveDown"));
+        bool jPressed = Input.GetKeyDown(SettingMenu.GetKeyBinding("Attack"));
+        bool uPressed = Input.GetKeyDown(SettingMenu.GetKeyBinding("SpecialAttack"));
         
         if (!jPressed && !uPressed) return;
         

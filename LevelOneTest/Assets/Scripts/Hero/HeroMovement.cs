@@ -101,14 +101,23 @@ public class HeroMovement : MonoBehaviour
         if (heroLife != null && heroLife.IsDead)
             return;
 
-        dirx = Input.GetAxis("Horizontal");
-        float diry = Input.GetAxis("Vertical");
+        // 使用SettingMenu获取自定义按键绑定
+        float horizontal = 0f;
+        float vertical = 0f;
+        
+        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveLeft"))) horizontal -= 1f;
+        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveRight"))) horizontal += 1f;
+        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveDown"))) vertical -= 1f;
+        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveUp"))) vertical += 1f;
+        
+        dirx = horizontal;
+        float diry = vertical;
 
-        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0)
+        // 跳跃输入处理
+        if (Input.GetKeyUp(SettingMenu.GetKeyBinding("Jump")) && rb.velocity.y > 0)
         {
             rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * jumpCutMultiplier);
         }
-
 
         UpdateCoyoteTime();
         UpdateJumpBuffer();
@@ -140,7 +149,7 @@ public class HeroMovement : MonoBehaviour
 
     private void UpdateJumpBuffer()
     {
-        if (Input.GetButtonDown("Jump"))
+        if (Input.GetKeyDown(SettingMenu.GetKeyBinding("Jump")))
             jumpBufferCounter = jumpBufferTime;
         else
             jumpBufferCounter -= Time.deltaTime;
@@ -245,7 +254,9 @@ public class HeroMovement : MonoBehaviour
 
     private void HandleSliding()
     {
-        if (slideUnlocked && Input.GetKeyDown(KeyCode.LeftShift) && !isSliding && IsGrounded())
+        bool slideInput = Input.GetKeyDown(SettingMenu.GetKeyBinding("Slide"));
+        
+        if (slideUnlocked && slideInput && !isSliding && IsGrounded())
         {
             // 检查滑铲体力
             if (heroStamina != null && !heroStamina.CanPerformSlide())
