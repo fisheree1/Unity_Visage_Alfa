@@ -39,11 +39,7 @@ public class CheckPoint : MonoBehaviour
             spriteRenderer.color = inactiveColor;
         }
         
-        // 设置UI文本
-        if (interactionText != null)
-        {
-            interactionText.text = $"Press <color=yellow>[{interactKey}]</color> to activate";
-        }
+
         
         // 隐藏交互UI
         if (interactionUI != null)

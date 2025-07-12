@@ -8,7 +8,7 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private float moveSpeed = 5f;
     [SerializeField] private float jumpForce = 12f;  // 增加跳跃力度配合新的重力系统
     [SerializeField] private float climbSpeed = 3f;
-    [SerializeField] private float ladderDetectionDistance = 0.3f;
+    [SerializeField] private float ladderDetectionDistance = 0.01f;
 
     [Header("Ground Detection")]
     [SerializeField] private Transform groundCheck;
@@ -16,7 +16,7 @@ public class HeroMovement : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
 
     [Header("Double Jump Settings")]
-    [SerializeField] private float doubleJumpForce = 10f;  // 调整双跳力度
+    [SerializeField] private float doubleJumpForce = 10f;  
     [SerializeField] private bool doubleJumpUnlocked = false;
 
     [Header("Slide Settings")]
@@ -43,15 +43,20 @@ public class HeroMovement : MonoBehaviour
 
     [SerializeField] private float jumpCutMultiplier = 0.3f;  // 更强的跳跃切断效果
 
+    
+
 
     private float coyoteTimeCounter;
     private float jumpBufferCounter;
+
+    private GameObject detectedLadder;  // 检测到的梯子对象
 
     // Components
     private Rigidbody2D rb;
     private Animator anim;
     private HeroAttackController attackController;
     private HeroLife heroLife;
+    private HeroStamina heroStamina;
 
     private float dirx = 0f;
     private bool isOnLadder = false;
@@ -84,6 +89,7 @@ public class HeroMovement : MonoBehaviour
         anim = GetComponent<Animator>();
         attackController = GetComponent<HeroAttackController>();
         heroLife = GetComponent<HeroLife>();
+        heroStamina = GetComponent<HeroStamina>();
         originalColliderSize = capsuleCollider.size;
         originalColliderOffset = capsuleCollider.offset;
 
@@ -158,12 +164,38 @@ public class HeroMovement : MonoBehaviour
             // 检查是否是双跳
             if (!IsGrounded() && !hasDoubleJumped && doubleJumpUnlocked)
             {
+                // 检查双跳体力
+                if (heroStamina != null && !heroStamina.CanPerformDoubleJump())
+                {
+                    Debug.Log("Not enough stamina for double jump!");
+                    return;
+                }
+                
+                // 消耗双跳体力
+                if (heroStamina != null)
+                {
+                    heroStamina.ConsumeDoubleJumpStamina();
+                }
+                
                 hasDoubleJumped = true;
                 rb.velocity = new Vector2(rb.velocity.x, doubleJumpForce);
                 Debug.Log("Double jump triggered!");
             }
             else
             {
+                // 检查普通跳跃体力
+                if (heroStamina != null && !heroStamina.CanPerformJump())
+                {
+                    Debug.Log("Not enough stamina for jump!");
+                    return;
+                }
+                
+                // 消耗跳跃体力
+                if (heroStamina != null)
+                {
+                    heroStamina.ConsumeJumpStamina();
+                }
+                
                 rb.velocity = new Vector2(rb.velocity.x, jumpForce);
                 Debug.Log("Normal jump triggered!");
             }
@@ -196,6 +228,7 @@ public class HeroMovement : MonoBehaviour
             isClimbing = true;
             rb.gravityScale = 0f;  // 爬梯时无重力
             rb.velocity = new Vector2(0, verticalInput * climbSpeed);
+            transform.position = new Vector2(detectedLadder.transform.position.x, transform.position.y);
         }
         else if (isClimbing)
         {
@@ -207,13 +240,22 @@ public class HeroMovement : MonoBehaviour
             else if (Mathf.Abs(verticalInput) == 0)
                 rb.velocity = new Vector2(0, 0);
         }
-        // 移除else分支，让BetterJump函数处理重力
+
     }
 
     private void HandleSliding()
     {
         if (slideUnlocked && Input.GetKeyDown(KeyCode.LeftShift) && !isSliding && IsGrounded())
+        {
+            // 检查滑铲体力
+            if (heroStamina != null && !heroStamina.CanPerformSlide())
+            {
+                Debug.Log("Not enough stamina for slide!");
+                return;
+            }
+            
             StartCoroutine(Slide());
+        }
     }
 
     private void HandleFacingDirection()
@@ -247,18 +289,20 @@ public class HeroMovement : MonoBehaviour
         Vector2 heroCenter = transform.position;
         Collider2D[] colliders = Physics2D.OverlapCircleAll(heroCenter, ladderDetectionDistance);
 
-        bool foundLadder = false;
-
+        detectedLadder = null;  // 每次检测前重置
+        
         foreach (Collider2D col in colliders)
-            if (col.gameObject.name.Contains("ClimbMap") || col.CompareTag("Ladder"))
+        {
+            if (col.CompareTag("Ladder"))
             {
-                foundLadder = true;
-                break;
+                detectedLadder = col.gameObject;
+                isOnLadder = true;
+                return;
             }
-
-        isOnLadder = foundLadder;
-
-        if (!isOnLadder && isClimbing)
+        }
+        
+        isOnLadder = false;
+        if (isClimbing)
         {
             isClimbing = false;
             rb.gravityScale = 1f;
@@ -328,6 +372,12 @@ public class HeroMovement : MonoBehaviour
 
     private IEnumerator Slide()
     {
+        // 消耗滑铲体力
+        if (heroStamina != null)
+        {
+            heroStamina.ConsumeSlideStamina();
+        }
+        
         isSliding = true;
         float originalGravity = rb.gravityScale;
         rb.gravityScale = 0f;

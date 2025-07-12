@@ -5,8 +5,8 @@ using UnityEngine.SceneManagement;
 public class HeroLife : MonoBehaviour
 {
     [Header("Hero Health Settings")]
-    [SerializeField] private int maxHealth = 3;
-    [SerializeField] private int currentHealth;
+    [SerializeField] public int maxHealth = 3;
+    [SerializeField] public int currentHealth;
 
     [Header("Damage Response")]
     [SerializeField] private float damageFlashDuration = 0.2f;

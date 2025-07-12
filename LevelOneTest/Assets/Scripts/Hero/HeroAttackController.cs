@@ -24,6 +24,7 @@ public class HeroAttackController : MonoBehaviour
     private Animator anim;
     private HeroMovement heroMovement;
     private Rigidbody2D rb;
+    private HeroStamina heroStamina;
     
     // Attack Hitboxes
     private GameObject basicAttackHitbox;
@@ -57,6 +58,7 @@ public class HeroAttackController : MonoBehaviour
         anim = GetComponent<Animator>();
         heroMovement = GetComponent<HeroMovement>();
         rb = GetComponent<Rigidbody2D>();
+        heroStamina = GetComponent<HeroStamina>();
         
         // 查找攻击碰撞盒
         basicAttackHitbox = transform.Find("AttackHitbox")?.gameObject;
@@ -134,10 +136,23 @@ public class HeroAttackController : MonoBehaviour
     
     private void TriggerBasicAttack()
     {
+        // 检查体力是否足够
+        if (heroStamina != null && !heroStamina.CanPerformBasicAttack())
+        {
+            Debug.Log("Not enough stamina for basic attack!");
+            return;
+        }
+        
         currentAttackType = AttackType.Basic;
         isAttacking = true;
         StopHorizontalMovement();
         attackTimer = attackCooldown;
+        
+        // 消耗体力
+        if (heroStamina != null)
+        {
+            heroStamina.ConsumeBasicAttackStamina();
+        }
         
         // 增加连击数
         comboCount++;
@@ -166,9 +181,22 @@ public class HeroAttackController : MonoBehaviour
     
     private void TriggerUpAttack()
     {
+        // 检查体力是否足够
+        if (heroStamina != null && !heroStamina.CanPerformUpAttack())
+        {
+            Debug.Log("Not enough stamina for up attack!");
+            return;
+        }
+        
         currentAttackType = AttackType.UpAttack;
         isAttacking = true;
         upAttackTimer = upAttackCooldown;
+        
+        // 消耗体力
+        if (heroStamina != null)
+        {
+            heroStamina.ConsumeUpAttackStamina();
+        }
         
         anim.SetTrigger("UpAttack");
         
@@ -183,10 +211,22 @@ public class HeroAttackController : MonoBehaviour
     
     private void TriggerDownAttack()
     {
+        // 检查体力是否足够
+        if (heroStamina != null && !heroStamina.CanPerformDownAttack())
+        {
+            Debug.Log("Not enough stamina for down attack!");
+            return;
+        }
+        
         currentAttackType = AttackType.DownAttack;
         isAttacking = true;
-
         downAttackTimer = downAttackCooldown;
+        
+        // 消耗体力
+        if (heroStamina != null)
+        {
+            heroStamina.ConsumeDownAttackStamina();
+        }
         
         anim.SetTrigger("DownAttack");
         
@@ -201,10 +241,23 @@ public class HeroAttackController : MonoBehaviour
     
     private void TriggerSpecialAttack()
     {
+        // 检查体力是否足够
+        if (heroStamina != null && !heroStamina.CanPerformSpecialAttack())
+        {
+            Debug.Log("Not enough stamina for special attack!");
+            return;
+        }
+        
         currentAttackType = AttackType.Special;
         isAttacking = true;
         StopHorizontalMovement();
         specialAttackTimer = specialAttackCooldown;
+        
+        // 消耗体力
+        if (heroStamina != null)
+        {
+            heroStamina.ConsumeSpecialAttackStamina();
+        }
         
         // 增加特殊攻击连击数
         specialComboCount++;
