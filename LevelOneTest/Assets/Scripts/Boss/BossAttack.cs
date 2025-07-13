@@ -5,12 +5,18 @@ using UnityEngine;
 // 魔法攻击类型枚举
 public enum MagicAttackType
 {
-    Single,     // 单发
     MultiShot,  // 连续多发
     Fan,        // 扇形
     Barrage,    // 弹幕
     Homing,     // 追踪
     Lightning   // 雷电攻击
+}
+
+// 魔法元素类型枚举
+public enum MagicElementType
+{
+    Fire,       // 火球
+    Lightning   // 雷电
 }
 
 public class BossAttack : MonoBehaviour
@@ -41,11 +47,26 @@ public class BossAttack : MonoBehaviour
     [SerializeField] private float lightningStrikeDelay = 0.3f; // 连击间隔
     
     [Header("Magic Attack Types")]
-    [SerializeField] private MagicAttackType magicAttackType = MagicAttackType.Single;
+    [SerializeField] private MagicAttackType magicAttackType = MagicAttackType.MultiShot; // 仅用于调试，实际游戏中会随机选择
     [SerializeField] private int multiShotCount = 3; // 多发射击数量
     [SerializeField] private float multiShotDelay = 0.2f; // 多发射击间隔
     [SerializeField] private float fanAngle = 30f; // 扇形攻击角度
     [SerializeField] private int fanProjectileCount = 5; // 扇形弹射物数量
+    
+    [Header("Dynamic Magic System - Attack Type Probabilities")]
+    [Range(0, 100)] [SerializeField] private int multiShotProbability = 25;  // 连续多发概率
+    [Range(0, 100)] [SerializeField] private int fanProbability = 25;        // 扇形攻击概率
+    [Range(0, 100)] [SerializeField] private int barrageProbability = 20;    // 弹幕攻击概率
+    [Range(0, 100)] [SerializeField] private int homingProbability = 15;     // 追踪攻击概率
+    [Range(0, 100)] [SerializeField] private int lightningProbability = 15; // 雷电攻击概率
+    
+    [Header("Dynamic Magic System - Element Type Probabilities")]
+    [Range(0, 100)] [SerializeField] private int fireProbability = 60;       // 火球概率
+    [Range(0, 100)] [SerializeField] private int lightningElementProbability = 40; // 雷电元素概率
+    
+    [Header("Element-Specific Prefabs")]
+    [SerializeField] private GameObject fireProjectilePrefab;      // 火球预制体
+    [SerializeField] private GameObject lightningProjectilePrefab; // 雷电弹预制体
 
     [Header("Effects")]
     [SerializeField] private GameObject hitEffectPrefab;
@@ -155,52 +176,112 @@ public class BossAttack : MonoBehaviour
         // 更新所有魔法生成点的位置根据朝向
         UpdateMagicSpawnPointsPosition();
         
+        // 随机选择攻击类型和元素类型
+        MagicAttackType selectedAttackType = GetRandomAttackType();
+        MagicElementType selectedElementType = GetRandomElementType();
+        
+        Debug.Log($"Selected magic attack: {selectedAttackType} with {selectedElementType} element");
+        
         // 根据攻击类型执行不同的魔法攻击
-        switch (magicAttackType)
+        switch (selectedAttackType)
         {
-            case MagicAttackType.Single:
-                yield return StartCoroutine(CastSingleMagic());
-                break;
             case MagicAttackType.MultiShot:
-                yield return StartCoroutine(CastMultiShotMagic());
+                yield return StartCoroutine(CastMultiShotMagic(selectedElementType));
                 break;
             case MagicAttackType.Fan:
-                yield return StartCoroutine(CastFanMagic());
+                yield return StartCoroutine(CastFanMagic(selectedElementType));
                 break;
             case MagicAttackType.Barrage:
-                yield return StartCoroutine(CastBarrageMagic());
+                yield return StartCoroutine(CastBarrageMagic(selectedElementType));
                 break;
             case MagicAttackType.Homing:
-                yield return StartCoroutine(CastHomingMagic());
+                yield return StartCoroutine(CastHomingMagic(selectedElementType));
                 break;
             case MagicAttackType.Lightning:
                 yield return StartCoroutine(CastLightningMagic());
                 break;
         }
     }
-
-    // 单发魔法攻击
-    private IEnumerator CastSingleMagic()
+    
+    // 随机选择攻击类型
+    private MagicAttackType GetRandomAttackType()
     {
-        Transform spawnPoint = GetRandomSpawnPoint();
-        if (spawnPoint == null) yield break;
-
-        // Show charge effect
-        GameObject chargeEffect = CreateChargeEffect(spawnPoint);
+        int totalProbability = multiShotProbability + fanProbability + barrageProbability + homingProbability + lightningProbability;
         
-        // Wait for charge time
-        yield return new WaitForSeconds(0.7f);
+        if (totalProbability == 0)
+        {
+            Debug.LogWarning("All attack type probabilities are 0! Using MultiShot as default.");
+            return MagicAttackType.MultiShot;
+        }
         
-        // Remove charge effect
-        if (chargeEffect != null) Destroy(chargeEffect);
+        int randomValue = Random.Range(0, totalProbability);
+        int currentThreshold = 0;
         
-        // Launch single projectile
-        Vector2 direction = bossMove.IsFacingRight ? Vector2.right : Vector2.left;
-        CreateProjectile(spawnPoint.position, direction, magicDamage);
+        currentThreshold += multiShotProbability;
+        if (randomValue < currentThreshold) return MagicAttackType.MultiShot;
+        
+        currentThreshold += fanProbability;
+        if (randomValue < currentThreshold) return MagicAttackType.Fan;
+        
+        currentThreshold += barrageProbability;
+        if (randomValue < currentThreshold) return MagicAttackType.Barrage;
+        
+        currentThreshold += homingProbability;
+        if (randomValue < currentThreshold) return MagicAttackType.Homing;
+        
+        return MagicAttackType.Lightning;
+    }
+    
+    // 随机选择元素类型
+    private MagicElementType GetRandomElementType()
+    {
+        int totalProbability = fireProbability + lightningElementProbability;
+        
+        if (totalProbability == 0)
+        {
+            Debug.LogWarning("All element type probabilities are 0! Using Fire as default.");
+            return MagicElementType.Fire;
+        }
+        
+        int randomValue = Random.Range(0, totalProbability);
+        int currentThreshold = 0;
+        
+        currentThreshold += fireProbability;
+        if (randomValue < currentThreshold) return MagicElementType.Fire;
+        
+        return MagicElementType.Lightning;
+    }
+    
+    // 根据元素类型获取对应的预制体
+    private GameObject GetProjectilePrefabByElement(MagicElementType elementType)
+    {
+        switch (elementType)
+        {
+            case MagicElementType.Fire:
+                return fireProjectilePrefab ?? magicProjectilePrefab;
+            case MagicElementType.Lightning:
+                return lightningProjectilePrefab ?? magicProjectilePrefab;
+            default:
+                return magicProjectilePrefab;
+        }
+    }
+    
+    // 根据元素类型获取伤害值
+    private int GetDamageByElement(MagicElementType elementType)
+    {
+        switch (elementType)
+        {
+            case MagicElementType.Fire:
+                return magicDamage + 2; // 火球伤害稍高
+            case MagicElementType.Lightning:
+                return magicDamage + 3; // 雷电伤害最高
+            default:
+                return magicDamage;
+        }
     }
 
     // 连续多发魔法攻击
-    private IEnumerator CastMultiShotMagic()
+    private IEnumerator CastMultiShotMagic(MagicElementType elementType)
     {
         Transform spawnPoint = GetRandomSpawnPoint();
         if (spawnPoint == null) yield break;
@@ -212,15 +293,18 @@ public class BossAttack : MonoBehaviour
         
         // Launch multiple projectiles in sequence
         Vector2 direction = bossMove.IsFacingRight ? Vector2.right : Vector2.left;
+        GameObject projectilePrefab = GetProjectilePrefabByElement(elementType);
+        int damage = GetDamageByElement(elementType);
+        
         for (int i = 0; i < multiShotCount; i++)
         {
-            CreateProjectile(spawnPoint.position, direction, magicDamage);
+            CreateProjectile(spawnPoint.position, direction, damage, projectilePrefab, elementType);
             yield return new WaitForSeconds(multiShotDelay);
         }
     }
 
     // 扇形魔法攻击
-    private IEnumerator CastFanMagic()
+    private IEnumerator CastFanMagic(MagicElementType elementType)
     {
         Transform spawnPoint = GetRandomSpawnPoint();
         if (spawnPoint == null) yield break;
@@ -235,16 +319,19 @@ public class BossAttack : MonoBehaviour
         float angleStep = fanAngle / (fanProjectileCount - 1);
         float startAngle = -fanAngle / 2;
         
+        GameObject projectilePrefab = GetProjectilePrefabByElement(elementType);
+        int damage = GetDamageByElement(elementType);
+        
         for (int i = 0; i < fanProjectileCount; i++)
         {
             float angle = startAngle + (angleStep * i);
             Vector2 direction = RotateVector(baseDirection, angle);
-            CreateProjectile(spawnPoint.position, direction, magicDamage);
+            CreateProjectile(spawnPoint.position, direction, damage, projectilePrefab, elementType);
         }
     }
 
     // 弹幕魔法攻击
-    private IEnumerator CastBarrageMagic()
+    private IEnumerator CastBarrageMagic(MagicElementType elementType)
     {
         // Use all spawn points for barrage
         GameObject[] chargeEffects = new GameObject[magicSpawnPoints.Length];
@@ -265,15 +352,18 @@ public class BossAttack : MonoBehaviour
         
         // Launch projectiles from all spawn points
         Vector2 direction = bossMove.IsFacingRight ? Vector2.right : Vector2.left;
+        GameObject projectilePrefab = GetProjectilePrefabByElement(elementType);
+        int damage = GetDamageByElement(elementType);
+        
         foreach (var spawnPoint in magicSpawnPoints)
         {
-            CreateProjectile(spawnPoint.position, direction, magicDamage);
+            CreateProjectile(spawnPoint.position, direction, damage, projectilePrefab, elementType);
             yield return new WaitForSeconds(0.1f); // Small delay between each shot
         }
     }
 
     // 追踪魔法攻击
-    private IEnumerator CastHomingMagic()
+    private IEnumerator CastHomingMagic(MagicElementType elementType)
     {
         Transform spawnPoint = GetRandomSpawnPoint();
         if (spawnPoint == null) yield break;
@@ -285,7 +375,10 @@ public class BossAttack : MonoBehaviour
         
         // Create homing projectile
         Vector2 direction = bossMove.IsFacingRight ? Vector2.right : Vector2.left;
-        GameObject projectile = CreateProjectile(spawnPoint.position, direction, magicDamage);
+        GameObject projectilePrefab = GetProjectilePrefabByElement(elementType);
+        int damage = GetDamageByElement(elementType);
+        
+        GameObject projectile = CreateProjectile(spawnPoint.position, direction, damage, projectilePrefab, elementType);
         
         // Add homing behavior (simplified version)
         if (projectile != null)
@@ -500,17 +593,28 @@ public class BossAttack : MonoBehaviour
         return null;
     }
 
-    // 创建弹射物
+    // 创建弹射物 - 原有方法
     private GameObject CreateProjectile(Vector3 position, Vector2 direction, int damage)
     {
-        if (magicProjectilePrefab == null)
+        return CreateProjectile(position, direction, damage, magicProjectilePrefab, MagicElementType.Fire);
+    }
+    
+    // 创建弹射物 - 新方法支持元素类型
+    private GameObject CreateProjectile(Vector3 position, Vector2 direction, int damage, GameObject projectilePrefab, MagicElementType elementType)
+    {
+        if (projectilePrefab == null)
         {
-            Debug.LogWarning("Magic projectile prefab not assigned!");
-            return null;
+            Debug.LogWarning($"Projectile prefab for {elementType} not assigned! Using default.");
+            projectilePrefab = magicProjectilePrefab;
+            if (projectilePrefab == null)
+            {
+                Debug.LogWarning("Default magic projectile prefab also not assigned!");
+                return null;
+            }
         }
 
-        GameObject projectile = Instantiate(magicProjectilePrefab, position, Quaternion.identity);
-        Debug.Log($"Magic projectile created at {position} with direction {direction}");
+        GameObject projectile = Instantiate(projectilePrefab, position, Quaternion.identity);
+        Debug.Log($"{elementType} projectile created at {position} with direction {direction} and damage {damage}");
         
         // Configure projectile
         Rigidbody2D projectileRb = projectile.GetComponent<Rigidbody2D>();
@@ -540,7 +644,7 @@ public class BossAttack : MonoBehaviour
         {
             magicProjectileScript = projectile.AddComponent<MagicProjectile>();
         }
-        magicProjectileScript.Initialize(damage, direction, playerLayer);
+        magicProjectileScript.Initialize(damage, direction, playerLayer, elementType);
         
         // Destroy projectile after lifetime
         Destroy(projectile, magicProjectileLifetime);
@@ -620,18 +724,48 @@ public class MagicProjectile : MonoBehaviour
     private int damage;
     private Vector2 direction;
     private LayerMask targetLayer;
+    private MagicElementType elementType;
     private bool hasHitTarget = false;
     private bool isHoming = false;
     private Transform target;
     private float homingSpeed = 5f;
     
-    public void Initialize(int damage, Vector2 direction, LayerMask targetLayer)
+    
+    // 新的Initialize方法支持元素类型
+    public void Initialize(int damage, Vector2 direction, LayerMask targetLayer, MagicElementType elementType)
     {
         this.damage = damage;
         this.direction = direction;
         this.targetLayer = targetLayer;
+        this.elementType = elementType;
         
-        Debug.Log($"Magic projectile initialized - Damage: {damage}, Direction: {direction}, TargetLayer: {targetLayer}");
+        StartCoroutine(ForceUpdateFlipNextFrame(direction));
+        
+        Debug.Log($"Magic projectile initialized - Damage: {damage}, Direction: {direction}, Element: {elementType}, TargetLayer: {targetLayer}");
+    }
+    
+    // 在下一帧强制更新翻转状态
+    private IEnumerator ForceUpdateFlipNextFrame(Vector2 direction)
+    {
+        yield return null; // 等待一帧
+        HandleSpriteFlipping(direction);
+    }
+    
+    
+    // 处理精灵翻转
+    private void HandleSpriteFlipping(Vector2 moveDirection)
+    {
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.flipX = moveDirection.x >0;
+            spriteRenderer.flipY = false;
+            Debug.Log($"Fire projectile flip set: moveDirection.x = {moveDirection.x}, flipX = {spriteRenderer.flipX}");
+        }
+        else
+        {
+            Debug.LogWarning("SpriteRenderer not found on projectile!");
+        }
     }
     
     public void EnableHoming(bool enable)
@@ -657,7 +791,8 @@ public class MagicProjectile : MonoBehaviour
             Rigidbody2D rb = GetComponent<Rigidbody2D>();
             if (rb != null)
             {
-                rb.velocity = Vector2.Lerp(rb.velocity, targetDirection * homingSpeed, Time.deltaTime * 2f);
+                Vector2 newVelocity = Vector2.Lerp(rb.velocity, targetDirection * homingSpeed, Time.deltaTime * 2f);
+                rb.velocity = newVelocity;
             }
         }
     }
