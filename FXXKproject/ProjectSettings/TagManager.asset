@@ -10,6 +10,7 @@ TagManager:
   - EnemyAttack
   - SkillBook
   - CheckPoint
+  - Enemy
   layers:
   - Default
   - TransparentFX
@@ -22,8 +23,8 @@ TagManager:
   - HeroAttack
   - MovePlatform
   - EnemyAttack
-  - 
-  - 
+  - Boss
+  - SmallBoss
   - 
   - 
   - 

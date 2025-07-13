@@ -9,7 +9,9 @@ public class MGoBlinChaseState : IState
     private MGoBlinParameter parameter;
     private Rigidbody2D rb;
     private bool isInAttackRange;
+    private bool isInDashAtkRange;
     private float Timer = 0f;
+    private float DashTimer = 0f;
 
     public MGoBlinChaseState(MGoBlinP manager, MGoBlinParameter parameter)
     {
@@ -33,7 +35,7 @@ public class MGoBlinChaseState : IState
         }
         else
         {
-            // 1. 目标丢失或超出追击范围 -> 退回Idle
+            
             
 
             // 2. 保持面向目标
@@ -42,7 +44,7 @@ public class MGoBlinChaseState : IState
             // 3. 移动逻辑（在未进入攻击范围时移动）
             if (!isInAttackRange)
             {
-                
+                parameter.animator.Play("MGoBlin_chase");
                 MoveTowardsTarget();
             }
             else
@@ -52,9 +54,25 @@ public class MGoBlinChaseState : IState
 
             // 4. 攻击范围检测
             isInAttackRange = CheckAttackRange();
+            isInDashAtkRange = CheckDashAtkRange();
+            if ((isInDashAtkRange)&&(!isInAttackRange))
+            {
+                if(DashTimer <= 0f)
+                {
+                    Debug.Log("冲刺攻击");
+                    manager.TransitionState(MGoBlinStateType.HeavyAtk);
+                    DashTimer = parameter.dashAtkCooldown;
+                    return; // 立即切换状态，避免重复触发
+                }
+                else
+                {
+                    DashTimer -= Time.deltaTime;
+                    
+                }
+            }
 
             // 5. 检测到攻击范围立即切换状态
-            if (isInAttackRange)
+            else if ((isInDashAtkRange)&&(isInAttackRange))
             {
                 if (Timer <= 0f)
                 {
@@ -67,6 +85,7 @@ public class MGoBlinChaseState : IState
                 {
                     Timer -= Time.deltaTime;
                     parameter.animator.Play("MGoBlin_idle");
+                    StopMovement();
                 }
                 StopMovement(); // 确保在攻击状态前停止移动
 
@@ -76,8 +95,7 @@ public class MGoBlinChaseState : IState
                 // 如果不在攻击范围内，继续追击
                 if (parameter.target != null)
                 {
-                    parameter.animator.Play("MGoBlin_walk");
-                    MoveTowardsTarget();
+                    manager.TransitionState(MGoBlinStateType.Chase);
                 }
             }
         }
@@ -120,6 +138,11 @@ public class MGoBlinChaseState : IState
             parameter.attackArea,
             parameter.targetLayer
         );
+    }
+    private bool CheckDashAtkRange()
+    {
+        return Physics2D.OverlapCircle(parameter.attackPoint.position,
+            parameter.dashAttackArea, parameter.targetLayer);
     }
 
     private void StopMovement()

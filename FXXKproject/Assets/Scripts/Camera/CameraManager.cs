@@ -27,6 +27,8 @@ public class CameraManager : MonoBehaviour
 
     private Vector2 _startingTrackedObjectOffset;
 
+    private CinemachineVirtualCamera respawnCamera;
+
 
     private void Awake()
     {
@@ -165,6 +167,44 @@ public class CameraManager : MonoBehaviour
         }
 
         IsLerpingYDamping = false;
+    }
+
+    public void SetRespawnCamera(CinemachineVirtualCamera camera)
+    {
+        respawnCamera = camera;
+    }
+
+    public CinemachineVirtualCamera GetRespawnCamera()
+    {
+        return respawnCamera;
+    }
+    
+    public CinemachineVirtualCamera GetCurrentCamera()
+    {
+        return _currentCamera;
+    }
+
+    public void RespawnCamera()
+    {
+        if (respawnCamera != null)
+        {
+            _currentCamera.enabled = false;
+            respawnCamera.enabled = true;
+
+            for (int i = 0; i < _allVirtualCameras.Length; i++)
+            {
+                if (_allVirtualCameras[i].enabled)
+                {
+                    _currentCamera = _allVirtualCameras[i];
+
+                    _framingTransposer = _currentCamera.GetCinemachineComponent<CinemachineFramingTransposer>();
+                }
+            }
+
+            _normYPanAmount = _framingTransposer.m_ScreenY;
+
+            _startingTrackedObjectOffset = _framingTransposer.m_TrackedObjectOffset;
+        }
     }
 
     // Start is called before the first frame update

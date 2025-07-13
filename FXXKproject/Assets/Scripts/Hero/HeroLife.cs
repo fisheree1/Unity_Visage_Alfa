@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Cinemachine;
 
 public class HeroLife : MonoBehaviour
 {
@@ -45,6 +46,8 @@ public class HeroLife : MonoBehaviour
     public System.Action<int> OnHealthChanged;
     public System.Action OnDeath;
     public System.Action OnRespawn;
+
+    public CameraManager cameraManager;
 
     void Start()
     {
@@ -178,13 +181,6 @@ public class HeroLife : MonoBehaviour
             StartCoroutine(AutoRestart());
         }
     }
-    public void RespawnAfterDead()
-    {
-        if (useCheckPointRespawn)
-        {
-            StartCoroutine(CheckPointRespawn());
-        }
-    }
 
     private IEnumerator ShowGameOverUI()
     {
@@ -250,6 +246,13 @@ public class HeroLife : MonoBehaviour
 
         // 步骤3：重置位置
         transform.position = respawnPosition;
+        cameraManager = FindObjectOfType<CameraManager>();
+        if (cameraManager != null)
+        {
+            cameraManager.RespawnCamera();
+        }
+        
+
 
         // 步骤4：重置渲染
         if (spriteRenderer != null)

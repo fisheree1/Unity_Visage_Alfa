@@ -10,6 +10,8 @@ public enum MGoBlinStateType
     Idle,
     Patrol,
     Attack,
+    Attack2,
+    HeavyAtk,
     Chase,
     Hit,
     Dead
@@ -26,9 +28,11 @@ public enum MGoBlinStateType
     public LayerMask targetLayer;
     public Transform attackPoint;
     public float attackArea;
+    public float dashAttackArea;
     public float sightArea;
     public int damage = 1; // 攻击伤害
     public float attackCooldown = 0.7f; // 攻击冷却时间
+    public float dashAtkCooldown = 1.5f; // 冲刺攻击冷却时间
     public bool isHit = false; // 是否被击中
 
 }
@@ -48,8 +52,7 @@ public class MGoBlinP
     [SerializeField] private float shakeIntensity = 0.5f;
 
     // Components
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
+   
     private Rigidbody2D rb;
     private Collider2D col;
 
@@ -105,6 +108,8 @@ public class MGoBlinP
         states.Add(MGoBlinStateType.Idle, new MGoBlinIdleState(this, parameter));
         states.Add(MGoBlinStateType.Patrol, new MGoBlinPatrolState(this, parameter));
         states.Add(MGoBlinStateType.Attack, new MGoBlinAttackState(this, parameter));
+        states.Add(MGoBlinStateType.Attack2, new MGoBlinAttack2State(this, parameter));
+        states.Add(MGoBlinStateType.HeavyAtk, new MGoBlinHeavyAtkState(this, parameter));
         states.Add(MGoBlinStateType.Chase, new MGoBlinChaseState(this, parameter));
         states.Add(MGoBlinStateType.Hit, new MGoBlinHitState(this, parameter));
         states.Add(MGoBlinStateType.Dead, new MGoBlinDeadState(this, parameter));
@@ -226,6 +231,8 @@ public class MGoBlinP
     private void OnDrawGizmos()
     {
         Gizmos.DrawWireSphere(parameter.attackPoint.position, parameter.attackArea);
+        Gizmos.DrawWireSphere(parameter.attackPoint.position, parameter.dashAttackArea);
+        Gizmos.color = Color.red;
     }
     //受到伤害
     #region Damage System
@@ -247,11 +254,7 @@ public class MGoBlinP
             // 死亡状态
             TransitionState(MGoBlinStateType.Dead);
         }
-        else
-        {
-            // 受击状态
-            TransitionState(MGoBlinStateType.Hit);
-        }
+        
     }
     
    

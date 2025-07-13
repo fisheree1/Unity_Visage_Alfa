@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using Cinemachine;
 
 public class CheckPoint : MonoBehaviour
 {
@@ -20,6 +21,9 @@ public class CheckPoint : MonoBehaviour
     [SerializeField] private GameObject interactionUI;
     [SerializeField] private TextMeshProUGUI interactionText;
     
+    [Header("Camera References")]
+    [SerializeField] private CinemachineVirtualCamera associatedCamera;
+    
     // Components
     private SpriteRenderer spriteRenderer;
     private Color originalColor;
@@ -27,7 +31,8 @@ public class CheckPoint : MonoBehaviour
     // State
     private bool playerInRange = false;
     private HeroLife heroLife;
-    
+    private CameraManager cameraManager;
+
     void Start()
     {
         // 获取组件
@@ -39,7 +44,27 @@ public class CheckPoint : MonoBehaviour
             spriteRenderer.color = inactiveColor;
         }
         
-
+        // 查找 CameraManager
+        cameraManager = CameraManager.instance;
+        if (cameraManager == null)
+        {
+            Debug.LogWarning("CameraManager instance not found!");
+        }
+        
+        // 如果没有手动设置关联相机，尝试自动查找当前激活的相机
+        if (associatedCamera == null && cameraManager != null)
+        {
+            // 获取当前激活的虚拟相机
+            CinemachineVirtualCamera[] allCameras = FindObjectsOfType<CinemachineVirtualCamera>();
+            foreach (var cam in allCameras)
+            {
+                if (cam.enabled)
+                {
+                    associatedCamera = cam;
+                    break;
+                }
+            }
+        }
         
         // 隐藏交互UI
         if (interactionUI != null)
@@ -127,6 +152,8 @@ public class CheckPoint : MonoBehaviour
         
         // 设置复活点
         heroLife.SetRespawnPoint(transform.position);
+        cameraManager = FindObjectOfType<CameraManager>();
+        cameraManager.SetRespawnCamera(cameraManager.GetCurrentCamera());
         
         // 隐藏交互提示
         if (interactionUI != null)
