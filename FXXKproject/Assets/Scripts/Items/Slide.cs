@@ -19,6 +19,9 @@ public class SlideSkillBook : MonoBehaviour
     [Header("UI References")]
     [SerializeField] private GameObject interactionUI;
     [SerializeField] private TextMeshProUGUI interactionText;
+    [SerializeField] private GameObject skillLearnedUI;
+    [SerializeField] private TextMeshProUGUI skillNameText;
+    [SerializeField] private TextMeshProUGUI skillDescriptionText;
 
     [Header("Skill Settings")]
     [SerializeField] private string skillToUnlock = "Slide";
@@ -44,6 +47,11 @@ public class SlideSkillBook : MonoBehaviour
         if (interactionUI != null)
         {
             interactionUI.SetActive(false);
+        }
+
+        if (skillLearnedUI != null)
+        {
+            skillLearnedUI.SetActive(false);
         }
 
         if (isCollected)
@@ -119,12 +127,15 @@ public class SlideSkillBook : MonoBehaviour
 
         yield return StartCoroutine(PlayCollectionEffect());
 
+        // 解锁技能
         HeroMovement heroMovement = FindObjectOfType<HeroMovement>();
         if (heroMovement != null)
         {
             heroMovement.UnlockSlide();
             Debug.Log($"Successfully learned skill: {skillDisplayName}");
-            ShowSkillLearnedMessage();
+            
+            // 显示技能学习UI
+            yield return StartCoroutine(ShowSkillLearnedUI());
         }
         else
         {
@@ -159,6 +170,44 @@ public class SlideSkillBook : MonoBehaviour
 
             elapsed += Time.deltaTime;
             yield return null;
+        }
+    }
+
+    private IEnumerator ShowSkillLearnedUI()
+    {
+        if (skillLearnedUI != null)
+        {
+            // 设置技能信息文本
+            if (skillNameText != null)
+                skillNameText.text = $"Learn {skillDisplayName}";
+            
+            if (skillDescriptionText != null)
+                skillDescriptionText.text = skillDescription;
+            
+            // 显示UI
+            skillLearnedUI.SetActive(true);
+            
+            // 等待3秒或玩家按键关闭
+            float timer = 0f;
+            float displayDuration = 3f;
+            
+            while (timer < displayDuration)
+            {
+                if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Escape))
+                {
+                    break;
+                }
+                timer += Time.deltaTime;
+                yield return null;
+            }
+            
+            // 隐藏UI
+            skillLearnedUI.SetActive(false);
+        }
+        else
+        {
+            // 如果没有UI，则显示调试信息
+            ShowSkillLearnedMessage();
         }
     }
 

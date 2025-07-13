@@ -178,6 +178,13 @@ public class HeroLife : MonoBehaviour
             StartCoroutine(AutoRestart());
         }
     }
+    public void RespawnAfterDead()
+    {
+        if (useCheckPointRespawn)
+        {
+            StartCoroutine(CheckPointRespawn());
+        }
+    }
 
     private IEnumerator ShowGameOverUI()
     {

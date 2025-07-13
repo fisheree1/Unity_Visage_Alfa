@@ -283,6 +283,22 @@ public class SimpleNPCDialogue : MonoBehaviour
             
             // Player response
             new DialogueLine { speaker = "You", text = "Not yet, then I'll trouble you, little guide, to show me the way.", isPlayer = true },
+            
+            // Child calls mother
+            new DialogueLine { speaker = "Child", text = "Mom, I found someone who looks very similar to the person in the book! Come and see, they really look alike!", isPlayer = false },
+            
+            // Mother's reaction
+            new DialogueLine { speaker = "Child's Mother", text = "!!!", isPlayer = false },
+            new DialogueLine { speaker = "Child's Mother", text = "Come here quickly!", isPlayer = false },
+            new DialogueLine { speaker = "Child's Mother", text = "......", isPlayer = false },
+            new DialogueLine { speaker = "Child's Mother", text = "Isn't it enough that you helped the tyrant kill so many of our people? Now you've found us and want to exterminate us all?", isPlayer = false },
+            new DialogueLine { speaker = "Child's Mother", text = "Yuanyuan, go find your uncle and tell him they've found us.", isPlayer = false },
+            
+            // Child's confusion
+            new DialogueLine { speaker = "Child", text = "Huh? But sister is a good person.", isPlayer = false },
+            
+            // Mother's insistence
+            new DialogueLine { speaker = "Child's Mother", text = "You don't understand anything, go quickly!", isPlayer = false },
 
         };
     }
