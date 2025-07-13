@@ -9,7 +9,8 @@ public enum MagicAttackType
     MultiShot,  // 连续多发
     Fan,        // 扇形
     Barrage,    // 弹幕
-    Homing      // 追踪
+    Homing,     // 追踪
+    Lightning   // 雷电攻击
 }
 
 public class BossAttack : MonoBehaviour
@@ -29,6 +30,15 @@ public class BossAttack : MonoBehaviour
     [SerializeField] private Transform[] magicSpawnPoints; // 多个生成点
     [SerializeField] private float magicProjectileSpeed = 8f;
     [SerializeField] private float magicProjectileLifetime = 5f;
+    
+    [Header("Lightning Attack Settings")]
+    [SerializeField] private GameObject lightningPrefab; // 雷电攻击预制体
+    [SerializeField] private bool useSimpleLightning = true; // 使用简化版雷电
+    [SerializeField] private int lightningDamage = 25; // 雷电伤害
+    [SerializeField] private float lightningRange = 2f; // 雷电攻击范围
+    [SerializeField] private float lightningWarningTime = 1.5f; // 警告时间
+    [SerializeField] private int lightningStrikeCount = 3; // 连击次数
+    [SerializeField] private float lightningStrikeDelay = 0.3f; // 连击间隔
     
     [Header("Magic Attack Types")]
     [SerializeField] private MagicAttackType magicAttackType = MagicAttackType.Single;
@@ -163,6 +173,9 @@ public class BossAttack : MonoBehaviour
             case MagicAttackType.Homing:
                 yield return StartCoroutine(CastHomingMagic());
                 break;
+            case MagicAttackType.Lightning:
+                yield return StartCoroutine(CastLightningMagic());
+                break;
         }
     }
 
@@ -282,6 +295,164 @@ public class BossAttack : MonoBehaviour
             {
                 magicScript.EnableHoming(true);
             }
+        }
+    }
+
+    // 雷电魔法攻击
+    private IEnumerator CastLightningMagic()
+    {
+        Debug.Log("Casting Lightning Magic Attack");
+        
+        // 获取玩家位置
+        GameObject player = GameObject.FindGameObjectWithTag("Player");
+        if (player == null)
+        {
+            Debug.LogWarning("Player not found for lightning attack!");
+            yield break;
+        }
+        
+        // 连续雷击
+        for (int i = 0; i < lightningStrikeCount; i++)
+        {
+            Vector3 targetPosition = player.transform.position;
+            targetPosition.y += 2f; // 调整目标位置高度
+            
+            // 添加一些随机偏移，让攻击更有趣且不那么精确
+            if (i > 0)
+            {
+                float randomOffset = Random.Range(-2f, 2f);
+                targetPosition.x += randomOffset;
+            }
+            
+            // 创建雷电攻击
+            yield return StartCoroutine(CreateLightningStrike(targetPosition));
+            
+            // 等待下次雷击
+            if (i < lightningStrikeCount - 1)
+            {
+                yield return new WaitForSeconds(lightningStrikeDelay);
+            }
+        }
+    }
+    
+    // 创建单次雷电攻击
+    private IEnumerator CreateLightningStrike(Vector3 targetPosition)
+    {
+        // 创建警告指示器
+        GameObject warningIndicator = CreateLightningWarning(targetPosition);
+        
+        // 等待警告时间
+        yield return new WaitForSeconds(lightningWarningTime);
+        
+        // 移除警告指示器
+        if (warningIndicator != null)
+        {
+            Destroy(warningIndicator);
+        }
+        
+        // 创建雷电攻击
+        Vector3 lightningPosition = new Vector3(targetPosition.x, targetPosition.y + 10f, targetPosition.z);
+        GameObject lightning = null;
+        
+
+        if (lightningPrefab != null)
+        {
+            // 使用预制体雷电攻击
+            lightning = Instantiate(lightningPrefab, lightningPosition, Quaternion.identity);
+            
+            // 配置雷电攻击 - 使用反射或组件查找来避免编译错误
+            MonoBehaviour lightningScript = lightning.GetComponent<MonoBehaviour>();
+            if (lightningScript == null)
+            {
+                // 尝试添加LightningStrike组件
+                System.Type lightningType = System.Type.GetType("LightningStrike");
+                if (lightningType != null)
+                {
+                    lightningScript = (MonoBehaviour)lightning.AddComponent(lightningType);
+                }
+            }
+            
+            // 如果找到了组件，使用反射调用Initialize方法
+            if (lightningScript != null)
+            {
+                System.Reflection.MethodInfo initMethod = lightningScript.GetType().GetMethod("Initialize");
+                if (initMethod != null)
+                {
+                    initMethod.Invoke(lightningScript, new object[] { lightningDamage, targetPosition, lightningRange, playerLayer });
+                }
+            }
+        }
+        else
+        {
+            Debug.LogWarning("No lightning prefab assigned and simple lightning is disabled!");
+        }
+        
+        Debug.Log($"Lightning strike created at {targetPosition}");
+    }
+    
+
+    
+    // 创建雷电警告指示器
+    private GameObject CreateLightningWarning(Vector3 position)
+    {
+        // 创建简单的警告指示器
+        GameObject warning = new GameObject("LightningWarning");
+        warning.transform.position = position;
+        
+        // 添加视觉组件
+        SpriteRenderer spriteRenderer = warning.AddComponent<SpriteRenderer>();
+        spriteRenderer.color = new Color(1f, 1f, 0f, 0.5f); // 半透明黄色
+        
+        // 创建简单的圆形精灵（如果没有专门的警告精灵）
+        Texture2D texture = new Texture2D(64, 64);
+        Color[] colors = new Color[64 * 64];
+        Vector2 center = new Vector2(32, 32);
+        
+        for (int x = 0; x < 64; x++)
+        {
+            for (int y = 0; y < 64; y++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), center);
+                if (distance <= 30)
+                {
+                    colors[y * 64 + x] = new Color(1f, 1f, 0f, 0.3f);
+                }
+                else
+                {
+                    colors[y * 64 + x] = Color.clear;
+                }
+            }
+        }
+        
+        texture.SetPixels(colors);
+        texture.Apply();
+        
+        Sprite warningSprite = Sprite.Create(texture, new Rect(0, 0, 64, 64), new Vector2(0.5f, 0.5f));
+        spriteRenderer.sprite = warningSprite;
+        spriteRenderer.sortingOrder = 10; // 确保警告在其他对象之上
+        
+        // 添加脉冲动画
+        StartCoroutine(PulseWarning(warning.transform));
+        
+        Debug.Log($"Lightning warning created at {position}");
+        return warning;
+    }
+    
+    // 警告指示器脉冲动画
+    private IEnumerator PulseWarning(Transform warningTransform)
+    {
+        if (warningTransform == null) yield break;
+        
+        Vector3 originalScale = warningTransform.localScale;
+        float elapsedTime = 0f;
+        
+        while (warningTransform != null && elapsedTime < lightningWarningTime)
+        {
+            float pulseScale = 1f + Mathf.Sin(elapsedTime * 8f) * 0.2f;
+            warningTransform.localScale = originalScale * pulseScale;
+            
+            elapsedTime += Time.deltaTime;
+            yield return null;
         }
     }
 
