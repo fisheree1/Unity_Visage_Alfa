@@ -3880,11 +3880,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 894160966763542774, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -34.25
+      value: 477
       objectReference: {fileID: 0}
     - target: {fileID: 894160966763542774, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -147.39
+      value: -186.5
       objectReference: {fileID: 0}
     - target: {fileID: 1570440656693674265, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}
       propertyPath: maxStamina
@@ -3992,6 +3992,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8551975056322841673, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}
       propertyPath: slideUnlocked
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8551975056322841673, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}
+      propertyPath: doubleJumpUnlocked
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8551975056322841673, guid: ec7f01fe0195f6840964d0c3eeb7ae71, type: 3}

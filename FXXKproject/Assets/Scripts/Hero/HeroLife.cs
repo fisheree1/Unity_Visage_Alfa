@@ -1,7 +1,6 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Cinemachine;
 
 public class HeroLife : MonoBehaviour
 {
@@ -46,8 +45,7 @@ public class HeroLife : MonoBehaviour
     public System.Action<int> OnHealthChanged;
     public System.Action OnDeath;
     public System.Action OnRespawn;
-
-    public CameraManager cameraManager;
+    public static System.Action OnPlayerRespawned; // 静态事件，用于通知所有游戏对象玩家复活
 
     void Start()
     {
@@ -169,23 +167,56 @@ public class HeroLife : MonoBehaviour
 
         OnDeath?.Invoke();
 
+        // 总是显示GameOverUI
+        if (gameOverUI != null)
+        {
+            StartCoroutine(ShowGameOverUI());
+        }
+
+        // 然后根据设置决定后续行为
         if (useCheckPointRespawn)
         {
             StartCoroutine(CheckPointRespawn());
         }
         else
         {
-            if (gameOverUI != null)
-                StartCoroutine(ShowGameOverUI());
-            
             StartCoroutine(AutoRestart());
+        }
+    }
+    public void RespawnAfterDead()
+    {
+        if (useCheckPointRespawn)
+        {
+            StartCoroutine(CheckPointRespawn());
         }
     }
 
     private IEnumerator ShowGameOverUI()
     {
+        Debug.Log("开始显示GameOverUI...");
         yield return new WaitForSeconds(deathAnimationDuration * 0.5f);
-        if (gameOverUI != null) gameOverUI.SetActive(true);
+        
+        if (gameOverUI != null) 
+        {
+            Debug.Log("激活GameOverUI对象");
+            gameOverUI.SetActive(true);
+            
+            // 尝试调用GameOverUI脚本的Show方法
+            var gameOverUIScript = gameOverUI.GetComponent<MonoBehaviour>();
+            if (gameOverUIScript != null && gameOverUIScript.GetType().Name == "GameOverUI")
+            {
+                Debug.Log("调用GameOverUI.Show()方法");
+                gameOverUIScript.SendMessage("Show", SendMessageOptions.DontRequireReceiver);
+            }
+            else
+            {
+                Debug.LogWarning("未找到GameOverUI脚本组件，只激活了GameObject");
+            }
+        }
+        else
+        {
+            Debug.LogError("GameOverUI引用为空！无法显示GameOverUI");
+        }
     }
 
     private IEnumerator AutoRestart()
@@ -201,21 +232,19 @@ public class HeroLife : MonoBehaviour
         // 检查是否有设置复活点
         if (respawnPosition != Vector3.zero)
         {
-            // 使用CheckPoint复活
-            Respawn();
+            // 有复活点，等待玩家在GameOverUI中选择
+            // GameOverUI会显示复活按钮，玩家可以选择复活或重启
+            Debug.Log("有复活点可用，等待玩家选择...");
         }
         else
         {
-            // 没有复活点，显示游戏结束UI或重启游戏
-            if (showGameOverOnNoCheckPoint && gameOverUI != null)
-            {
-                StartCoroutine(ShowGameOverUI());
-            }
-            else
+            // 没有复活点，等待一段时间后自动重启（如果没有显示GameOverUI）
+            if (!showGameOverOnNoCheckPoint)
             {
                 yield return new WaitForSeconds(respawnDelay);
                 RestartGame();
             }
+            // 如果showGameOverOnNoCheckPoint为true，GameOverUI已经显示了
         }
     }
 
@@ -246,13 +275,6 @@ public class HeroLife : MonoBehaviour
 
         // 步骤3：重置位置
         transform.position = respawnPosition;
-        cameraManager = FindObjectOfType<CameraManager>();
-        if (cameraManager != null)
-        {
-            cameraManager.RespawnCamera();
-        }
-        
-
 
         // 步骤4：重置渲染
         if (spriteRenderer != null)
@@ -283,11 +305,25 @@ public class HeroLife : MonoBehaviour
         if (attackController != null) attackController.enabled = true;
 
         // 步骤7：隐藏死亡UI
-        if (gameOverUI != null) gameOverUI.SetActive(false);
+        if (gameOverUI != null) 
+        {
+            gameOverUI.SetActive(false);
+            
+            // 尝试调用GameOverUI脚本的Hide方法
+            var gameOverUIScript = gameOverUI.GetComponent<MonoBehaviour>();
+            if (gameOverUIScript != null && gameOverUIScript.GetType().Name == "GameOverUI")
+            {
+                gameOverUIScript.SendMessage("Hide", SendMessageOptions.DontRequireReceiver);
+            }
+        }
 
         // 步骤8：触发事件
         OnRespawn?.Invoke();
         OnHealthChanged?.Invoke(currentHealth);
+        
+        // 触发静态复活事件，通知所有游戏对象
+        OnPlayerRespawned?.Invoke();
+        Debug.Log("触发玩家复活事件，通知所有游戏对象重置状态");
 
         // 步骤9：可选触发复活动画
         yield return null;
@@ -296,6 +332,9 @@ public class HeroLife : MonoBehaviour
         {
             anim.SetTrigger("Respawn");
         }
+
+        // 触发静态复活事件
+        OnPlayerRespawned?.Invoke();
     }
 
 
@@ -353,5 +392,68 @@ public class HeroLife : MonoBehaviour
     public bool HasValidRespawnPoint()
     {
         return respawnPosition != Vector3.zero;
+    }
+
+    /// <summary>
+    /// 调试方法：检查GameOverUI设置
+    /// </summary>
+    [ContextMenu("调试GameOverUI设置")]
+    public void DebugGameOverUISettings()
+    {
+        Debug.Log("=== GameOverUI 调试信息 ===");
+        Debug.Log($"useCheckPointRespawn: {useCheckPointRespawn}");
+        Debug.Log($"showGameOverOnNoCheckPoint: {showGameOverOnNoCheckPoint}");
+        Debug.Log($"gameOverUI引用: {(gameOverUI != null ? "已设置" : "未设置")}");
+        Debug.Log($"当前血量: {currentHealth}/{maxHealth}");
+        Debug.Log($"是否死亡: {isDead}");
+        Debug.Log($"复活点位置: {respawnPosition}");
+        Debug.Log($"是否有有效复活点: {HasValidRespawnPoint()}");
+        
+        if (gameOverUI != null)
+        {
+            Debug.Log($"GameOverUI对象名称: {gameOverUI.name}");
+            Debug.Log($"GameOverUI是否激活: {gameOverUI.activeInHierarchy}");
+            
+            var gameOverUIScript = gameOverUI.GetComponent<GameOverUI>();
+            if (gameOverUIScript != null)
+            {
+                Debug.Log("找到GameOverUI脚本组件");
+            }
+            else
+            {
+                Debug.LogWarning("未找到GameOverUI脚本组件！");
+            }
+        }
+        else
+        {
+            Debug.LogError("gameOverUI引用为空！请在Inspector中设置gameOverUI字段。");
+        }
+    }
+    
+    /// <summary>
+    /// 调试方法：强制显示GameOverUI
+    /// </summary>
+    [ContextMenu("强制显示GameOverUI")]
+    public void ForceShowGameOverUI()
+    {
+        if (gameOverUI != null)
+        {
+            StartCoroutine(ShowGameOverUI());
+            Debug.Log("强制显示GameOverUI");
+        }
+        else
+        {
+            Debug.LogError("无法显示GameOverUI：gameOverUI引用为空！");
+        }
+    }
+    
+    /// <summary>
+    /// 调试方法：测试死亡
+    /// </summary>
+    [ContextMenu("测试死亡")]
+    public void TestDeath()
+    {
+        Debug.Log("测试死亡功能...");
+        TakeDamage(maxHealth);
     }
 }
