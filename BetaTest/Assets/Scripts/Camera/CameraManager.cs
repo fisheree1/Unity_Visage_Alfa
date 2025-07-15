@@ -48,6 +48,8 @@ public class CameraManager : MonoBehaviour
             }
         }
 
+        SetRespawnCamera(_currentCamera);
+
         _normYPanAmount = _framingTransposer.m_ScreenY;
 
         _startingTrackedObjectOffset = _framingTransposer.m_TrackedObjectOffset;

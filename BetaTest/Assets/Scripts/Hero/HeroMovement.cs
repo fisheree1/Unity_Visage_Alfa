@@ -65,6 +65,7 @@ public class HeroMovement : MonoBehaviour
     private bool hasDoubleJumped = false;
     private bool isSliding = false;
     private MovementState lastState = MovementState.HeroIdle;
+    private bool controlsEnabled = true;  // 控制输入是否启用
 
     private Vector2 originalColliderSize;
     private Vector2 originalColliderOffset;
@@ -79,6 +80,40 @@ public class HeroMovement : MonoBehaviour
         PlayerJump,
         PlayerFall,
         HeroLadder
+    }
+
+    public void EnableControls()
+    {
+        controlsEnabled = true;
+        Debug.Log("HeroMovement controls enabled");
+    }
+
+    public void DisableControls()
+    {
+        controlsEnabled = false;
+        
+        // 立即停止水平移动
+        dirx = 0f;
+        rb.velocity = new Vector2(0f, rb.velocity.y);
+        
+        // 重置爬梯状态
+        if (isClimbing)
+        {
+            isClimbing = false;
+            rb.gravityScale = 1f;
+        }
+        
+        // 重置滑铲状态
+        if (isSliding)
+        {
+            StopAllCoroutines(); // 停止滑铲协程
+            isSliding = false;
+            capsuleCollider.size = originalColliderSize;
+            capsuleCollider.offset = originalColliderOffset;
+            rb.gravityScale = 1f;
+        }
+        
+        Debug.Log("HeroMovement controls disabled - character stopped");
     }
 
     private float _fallSpeedYDampingChangeThreshold;
@@ -101,32 +136,49 @@ public class HeroMovement : MonoBehaviour
         if (heroLife != null && heroLife.IsDead)
             return;
 
-        // 使用SettingMenu获取自定义按键绑定
-        float horizontal = 0f;
-        float vertical = 0f;
-        
-        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveLeft"))) horizontal -= 1f;
-        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveRight"))) horizontal += 1f;
-        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveDown"))) vertical -= 1f;
-        if (Input.GetKey(SettingMenu.GetKeyBinding("MoveUp"))) vertical += 1f;
-        
-        dirx = horizontal;
-        float diry = vertical;
-
-        // 跳跃输入处理
-        if (Input.GetKeyUp(SettingMenu.GetKeyBinding("Jump")) && rb.velocity.y > 0)
+        // 处理输入（只有在控制启用时）
+        if (controlsEnabled)
         {
-            rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * jumpCutMultiplier);
+            // 使用SettingMenu获取自定义按键绑定
+            float horizontal = 0f;
+            float vertical = 0f;
+            
+            if (Input.GetKey(SettingMenu.GetKeyBinding("MoveLeft"))) horizontal -= 1f;
+            if (Input.GetKey(SettingMenu.GetKeyBinding("MoveRight"))) horizontal += 1f;
+            if (Input.GetKey(SettingMenu.GetKeyBinding("MoveDown"))) vertical -= 1f;
+            if (Input.GetKey(SettingMenu.GetKeyBinding("MoveUp"))) vertical += 1f;
+            
+            dirx = horizontal;
+            float diry = vertical;
+
+            // 跳跃输入处理
+            if (Input.GetKeyUp(SettingMenu.GetKeyBinding("Jump")) && rb.velocity.y > 0)
+            {
+                rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * jumpCutMultiplier);
+            }
+
+            UpdateCoyoteTime();
+            UpdateJumpBuffer();
+
+            HandleClimbing(diry);
+            HandleHorizontalMovement();
+            HandleJump();
+            HandleSliding();
+            HandleFacingDirection();
+        }
+        else
+        {
+            // 控制禁用时，保持角色静止
+            dirx = 0f;
+            
+            // 确保水平速度为零（但保持垂直速度用于重力）
+            rb.velocity = new Vector2(0f, rb.velocity.y);
+            
+            // 仍然需要更新基本状态
+            UpdateCoyoteTime();
         }
 
-        UpdateCoyoteTime();
-        UpdateJumpBuffer();
-
-        HandleClimbing(diry);
-        HandleHorizontalMovement();
-        HandleJump();
-        HandleSliding();
-        HandleFacingDirection();
+        // 这些方法无论控制是否启用都需要执行
         UpdateAnimationState();
         BetterJump();
     }
@@ -157,6 +209,10 @@ public class HeroMovement : MonoBehaviour
 
     private void HandleHorizontalMovement()
     {
+        // 如果控制被禁用，不处理水平移动
+        if (!controlsEnabled)
+            return;
+            
         bool canMove = attackController == null || attackController.CanMove();
         float speedMultiplier = attackController != null ? attackController.GetMovementSpeedMultiplier() : 1f;
 

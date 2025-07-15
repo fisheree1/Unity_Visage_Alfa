@@ -95,7 +95,7 @@ public class PauseMenu : MonoBehaviour
         isPause = false;
         isInSettings = false;
         Time.timeScale = 1.0f;
-        SceneManager.LoadScene("MainMenu");
+        SceneManager.LoadScene("Start");
     }
 
     public void Pause()

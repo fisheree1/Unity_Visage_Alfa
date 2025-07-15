@@ -31,7 +31,7 @@ public class GameOverUI : MonoBehaviour
     [SerializeField] private AudioClip buttonClickSound;
     
     [Header("Scene Settings")]
-    [SerializeField] private string mainMenuSceneName = "MainMenu";
+    [SerializeField] private string mainMenuSceneName = "Start";
     [SerializeField] private int mainMenuSceneIndex = 0;
     [SerializeField] private bool useSceneIndex = false;
     
@@ -52,8 +52,16 @@ public class GameOverUI : MonoBehaviour
         }
         
         // 初始化UI状态
-        if (gameOverPanel != null)
+        // 如果gameOverPanel为null或者就是当前GameObject，则直接设置CanvasGroup
+        if (gameOverPanel != null && gameOverPanel != gameObject)
+        {
             gameOverPanel.SetActive(false);
+        }
+        else if (gameOverPanel == null || gameOverPanel == gameObject)
+        {
+            // 如果脚本就在Panel上，不要将自己设为不活跃，而是通过CanvasGroup控制显示
+            gameObject.SetActive(true);
+        }
             
         canvasGroup.alpha = 0f;
         canvasGroup.interactable = false;
@@ -163,9 +171,16 @@ public class GameOverUI : MonoBehaviour
         // 播放游戏结束音效
         PlayGameOverSound();
         
-        // 显示面板
-        if (gameOverPanel != null)
+        // 显示面板 - 如果Panel就是当前GameObject，则确保自己是活跃的
+        if (gameOverPanel != null && gameOverPanel != gameObject)
+        {
             gameOverPanel.SetActive(true);
+        }
+        else
+        {
+            // 如果脚本就在Panel上，确保GameObject是活跃的
+            gameObject.SetActive(true);
+        }
             
         // 根据英雄状态决定显示哪些按钮
         UpdateButtonVisibility();
@@ -183,13 +198,10 @@ public class GameOverUI : MonoBehaviour
     
     private void UpdateButtonVisibility()
     {
-        // 检查是否有有效的复活点
-        bool hasRespawnPoint = heroLife != null && heroLife.HasValidRespawnPoint();
-        
-        // 复活按钮只在有复活点时显示
+        // 总是显示重生按钮，让玩家选择重生（无论是否有checkpoint）
         if (respawnButton != null)
         {
-            respawnButton.gameObject.SetActive(hasRespawnPoint);
+            respawnButton.gameObject.SetActive(true);
         }
         
         // 重启按钮总是显示
@@ -262,8 +274,12 @@ public class GameOverUI : MonoBehaviour
         canvasGroup.interactable = false;
         canvasGroup.blocksRaycasts = false;
         
-        if (gameOverPanel != null)
+        // 隐藏面板 - 如果Panel就是当前GameObject，则通过CanvasGroup控制而不是SetActive
+        if (gameOverPanel != null && gameOverPanel != gameObject)
+        {
             gameOverPanel.SetActive(false);
+        }
+        // 如果脚本就在Panel上，不要将自己设为不活跃，CanvasGroup已经控制了显示
             
         isShowing = false;
     }
@@ -290,15 +306,17 @@ public class GameOverUI : MonoBehaviour
     {
         PlayButtonClickSound();
         
-        if (heroLife != null && heroLife.HasValidRespawnPoint())
+        if (heroLife != null)
         {
+            // 总是允许重生，无论是否有checkpoint
             heroLife.Respawn();
             HideGameOverUI();
+            Debug.Log("Player respawned at: " + heroLife.GetRespawnPoint());
         }
         else
         {
-            Debug.LogWarning("GameOverUI: 无法复活，没有有效的复活点！");
-            // 如果没有复活点，则重启游戏
+            Debug.LogWarning("GameOverUI: HeroLife component not found!");
+            // 如果找不到HeroLife组件，则重启游戏
             OnRestartButtonClicked();
         }
     }
