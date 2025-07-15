@@ -37,13 +37,6 @@ public class SlimeParameter
 public class SlimeP
 : MonoBehaviour
 {
-    [Header("Slime Health")]
-    [SerializeField] public int maxHealth = 3;
-    [SerializeField] public int currentHealth;
-
-    [Header("Damage Response")]
-    [SerializeField] private float damageFlashDuration = 0.2f;
-
     [Header("Camera Shake Settings")]
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeIntensity = 0.5f;
@@ -53,10 +46,12 @@ public class SlimeP
     private Color originalColor;
     private Rigidbody2D rb;
     private Collider2D col;
+    private EnemyLife enemyLife; // EnemyLife组件引用
 
-    // Health properties
-    public int CurrentHealth => currentHealth;
-    public int MaxHealth => maxHealth;
+    // Health properties - 现在通过EnemyLife组件获取
+    public int CurrentHealth => enemyLife != null ? enemyLife.CurrentHealth : 0;
+    public int MaxHealth => enemyLife != null ? enemyLife.MaxHealth : 0;
+    public bool IsDead => enemyLife != null ? enemyLife.IsDead : false;
 
     public SlimeParameter parameter;
     private IState currentState;
@@ -103,6 +98,13 @@ public class SlimeP
             Debug.Log("Added CapsuleCollider2D to Slime");
         }
 
+        // 获取或添加EnemyLife组件
+        enemyLife = GetComponent<EnemyLife>();
+        if (enemyLife == null)
+        {
+            enemyLife = gameObject.AddComponent<EnemyLife>();
+        }
+
         states.Add(SlimeStateType.Idle, new SlimeIdleState(this, parameter));
         states.Add(SlimeStateType.Patrol, new SlimePatrolState(this, parameter));
         states.Add(SlimeStateType.Attack, new SlimeAttackState(this, parameter));
@@ -113,8 +115,6 @@ public class SlimeP
 
         TransitionState(SlimeStateType.Idle);
 
-        // 初始化血量
-        currentHealth = maxHealth;
         //初始化相机震动源
         impulseSource = GetComponent<CinemachineImpulseSource>();
 
@@ -217,7 +217,7 @@ public class SlimeP
             {
                 parameter.target = null;
 
-                TransitionState(SlimeStateType.Patrol); // �˳�ʱ�л���Idle״̬
+                TransitionState(SlimeStateType.Patrol); // 退出时切换到Idle状态
             }
         }
     }
@@ -232,18 +232,18 @@ public class SlimeP
     #region Damage System
     public void TakeDamage(int damage)
     {
-        if (currentHealth <= 0) return; // 已死亡时不再受到伤害
+        if (enemyLife == null || enemyLife.IsDead) return; // 已死亡时不再受到伤害
 
-        int previousHealth = currentHealth;
-        currentHealth -= damage;
         parameter.isHit = true;
 
         // 触发屏幕震动
         CamaraShakeManager.Instance.CamaraShake(impulseSource);
 
-        // 确保血量不会变为负数
-        currentHealth = Mathf.Max(0, currentHealth);
-        if (currentHealth <= 0)
+        // 使用EnemyLife组件处理伤害
+        enemyLife.TakeDamage(damage);
+        
+        // 检查是否死亡
+        if (enemyLife.IsDead)
         {
             // 死亡状态
             TransitionState(SlimeStateType.Dead);

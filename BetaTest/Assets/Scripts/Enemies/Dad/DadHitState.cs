@@ -27,7 +27,7 @@ public class DadHitState : IState
         info = parameter.animator.GetCurrentAnimatorStateInfo(0);
         if (info.normalizedTime >= 0.95f)
         {
-            if (manager.currentHealth <= 0)
+            if (manager.IsDead)
             {
                 manager.TransitionState(DadStateType.Dead);
             }
@@ -35,7 +35,7 @@ public class DadHitState : IState
             {
                 parameter.isHit = false; // 重置被击中状态
                 parameter.target = GameObject.FindGameObjectWithTag("Player").transform; // 重新获取目标
-                manager.TransitionState(DadStateType.Chase); // 切换回追击状态
+                manager.TransitionState(DadStateType.Chase); // 切换到追逐状态
             }
 
         }

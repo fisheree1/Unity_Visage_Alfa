@@ -13,36 +13,56 @@ public class Enemy : MonoBehaviour
     private Animator hitanimation;
 
     new private Rigidbody2D rigidbody;
+    
+    // Check if this enemy has a state machine (like SlimeP, SGoBlinP, etc.)
+    private bool hasStateMachine = false;
+    
     void Start()
     {
         animator = transform.GetComponent<Animator>();
         hitanimation = transform.GetChild(3).GetComponent<Animator>();
         rigidbody = transform.GetComponent<Rigidbody2D>();
+        
+        // Check if this enemy uses a state machine
+        // State machine enemies should handle their own movement
+        hasStateMachine = GetComponent<SlimeP>() != null || 
+                         GetComponent<SGoBlinP>() != null ||
+                         GetComponent<MonoBehaviour>().GetType().Name.EndsWith("P");
     }
 
 
     void Update()
     {
-        info = animator.GetCurrentAnimatorStateInfo(0);
-        if (isHit)
+        // Only handle movement if this enemy doesn't have a state machine
+        if (!hasStateMachine)
         {
-            Debug.Log("Hit 动画播放中");
-            rigidbody.velocity = direction * speed;
-            if (info.normalizedTime >= 0.8f)
+            info = animator.GetCurrentAnimatorStateInfo(0);
+            if (isHit)
             {
-
-                Debug.Log("Hit 动画播放完毕");
-                isHit = false;
-                
+                Debug.Log("Hit 敌人移动中");
+                rigidbody.velocity = direction * speed;
+                if (info.normalizedTime >= 0.6f)
+                {
+                    Debug.Log("Hit 敌人移动完成");
+                    isHit = false;
+                }
             }
         }
     }
+    
     public void GetHit(Vector2 direction)
     {
         transform.localScale = new Vector3(direction.x, 1, 1);
-        isHit = true;
-        this.direction = direction;
+        
+        // Only set isHit for non-state machine enemies
+        // State machine enemies handle their own hit logic
+        if (!hasStateMachine)
+        {
+            isHit = true;
+            this.direction = direction;
+        }
+        
         animator.SetTrigger("Hit");
-        hitanimation.SetTrigger ("Hit");
+        hitanimation.SetTrigger("Hit");
     }
 }

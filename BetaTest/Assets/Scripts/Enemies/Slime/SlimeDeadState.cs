@@ -29,15 +29,8 @@ public class SlimeDeadState : IState
             return;
         }
 
-        // 安全播放死亡动画
-        if (HasAnimationState("Slime_death"))
-        {
-            parameter.animator.Play("Slime_death");
-        }
-        else
-        {
-            Debug.LogWarning("SlimeDeadState: Animation state 'Slime_death' not found!");
-        }
+        // 尝试播放死亡动画
+        PlayDeathAnimation();
 
         // 禁用碰撞器，防止死亡后还能被攻击
         var colliders = manager.GetComponents<Collider2D>();
@@ -67,6 +60,65 @@ public class SlimeDeadState : IState
         {
             DestroySlime();
         }
+    }
+
+    private void PlayDeathAnimation()
+    {
+        if (parameter?.animator == null) return;
+
+        // 尝试播放不同的死亡动画，按优先级顺序
+        string[] deathAnimations = {
+            "Slime_death",
+            "slime_death",
+            "Death",
+            "death",
+            "SlimeDeath",
+            "Die",
+            "die",
+            "SlimeDie",
+            "Dead",
+            "dead",
+            "SlimeDead"
+        };
+
+        foreach (string animName in deathAnimations)
+        {
+            if (HasAnimationState(animName))
+            {
+                parameter.animator.Play(animName);
+                return;
+            }
+        }
+
+        // 如果没有找到任何死亡动画，尝试使用Animator参数
+        if (parameter.animator.parameters.Length > 0)
+        {
+            try
+            {
+                parameter.animator.SetTrigger("Death");
+            }
+            catch { }
+            
+            try
+            {
+                parameter.animator.SetTrigger("Die");
+            }
+            catch { }
+            
+            try
+            {
+                parameter.animator.SetBool("isDead", true);
+            }
+            catch { }
+            
+            try
+            {
+                parameter.animator.SetInteger("State", 5); // 5 通常表示death
+            }
+            catch { }
+        }
+
+        Debug.LogWarning($"SlimeDeadState: No suitable death animation found for {manager.gameObject.name}");
     }
 
     private void DestroySlime()

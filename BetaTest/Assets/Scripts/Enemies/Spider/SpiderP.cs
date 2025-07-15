@@ -14,6 +14,7 @@ public enum SpiderStateType
     Hit,
     Dead
 }
+
 [System.Serializable]
 public class SpiderParameter
 {
@@ -31,41 +32,28 @@ public class SpiderParameter
     public int damage = 1; // 攻击伤害
     public float attackCooldown = 0.7f; // 攻击冷却时间
     public bool isHit = false; // 是否被击中
-
 }
 
-public class SpiderP
-: MonoBehaviour
+public class SpiderP : MonoBehaviour
 {
-    [Header("Spider Health")]
-    [SerializeField] public int maxHealth = 3;
-    [SerializeField] public int currentHealth;
-
-    [Header("Damage Response")]
-    [SerializeField] private float damageFlashDuration = 0.2f;
-
     [Header("Camera Shake Settings")]
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeIntensity = 0.5f;
 
     // Components
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
     private Rigidbody2D rb;
     private Collider2D col;
+    private EnemyLife enemyLife;
 
-    // Health properties
-    public int CurrentHealth => currentHealth;
-    public int MaxHealth => maxHealth;
+    // Health properties - 通过EnemyLife组件获取
+    public int CurrentHealth => enemyLife != null ? enemyLife.CurrentHealth : 0;
+    public int MaxHealth => enemyLife != null ? enemyLife.MaxHealth : 0;
+    public bool IsDead => enemyLife != null ? enemyLife.IsDead : false;
 
     public SpiderParameter parameter;
     private IState currentState;
     private Dictionary<SpiderStateType, IState> states = new Dictionary<SpiderStateType, IState>();
     private CinemachineImpulseSource impulseSource;
-
-
-    // 在动画事件调用的方法
-
 
     void Start()
     {
@@ -83,7 +71,6 @@ public class SpiderP
         {
             rb.freezeRotation = true; // 防止旋转
             rb.gravityScale = 1f; // 设置重力
-
         }
 
         // 如果没有Rigidbody2D，自动添加
@@ -103,6 +90,13 @@ public class SpiderP
             Debug.Log("Added CapsuleCollider2D to Spider");
         }
 
+        // 获取或添加EnemyLife组件
+        enemyLife = GetComponent<EnemyLife>();
+        if (enemyLife == null)
+        {
+            enemyLife = gameObject.AddComponent<EnemyLife>();
+        }
+
         states.Add(SpiderStateType.Idle, new SpiderIdleState(this, parameter));
         states.Add(SpiderStateType.Patrol, new SpiderPatrolState(this, parameter));
         states.Add(SpiderStateType.Attack, new SpiderAttackState(this, parameter));
@@ -110,25 +104,16 @@ public class SpiderP
         states.Add(SpiderStateType.Hit, new SpiderHitState(this, parameter));
         states.Add(SpiderStateType.Dead, new SpiderDeadState(this, parameter));
 
-
         TransitionState(SpiderStateType.Idle);
 
-        // 初始化血量
-        currentHealth = maxHealth;
-        //初始化相机震动源
+        // 初始化相机震动源
         impulseSource = GetComponent<CinemachineImpulseSource>();
-
-
+        
     }
+
     void Update()
     {
         currentState.OnUpdate();
-        var sr = GetComponent<SpriteRenderer>();
-        if (sr != null)
-        {
-            Debug.Log($"[{gameObject.name}] Enabled: {sr.enabled}, Color: {sr.color}, SortingOrder: {sr.sortingOrder}");
-        }
-
     }
 
     public void TransitionState(SpiderStateType type)
@@ -141,7 +126,6 @@ public class SpiderP
 
     public void FlipTo(Transform target)
     {
-
         if (target == null)
         {
             Debug.LogWarning("FlipTo called with null target!");
@@ -149,14 +133,12 @@ public class SpiderP
         }
 
         Vector3 direction = target.position - transform.position;
-
-
         float newScaleX = Mathf.Sign(direction.x) < 0 ? 1f : -1f;
         transform.localScale = new Vector3(newScaleX, 1f, 1f);
 
-
         Debug.DrawRay(transform.position, direction, Color.yellow, 0.1f);
     }
+
     #region sight_test
     private void OnTriggerEnter2D(Collider2D other)
     {
@@ -170,7 +152,6 @@ public class SpiderP
             else if (currentState is SpiderIdleState || currentState is SpiderPatrolState || currentState is SpiderChaseState)
             {
                 TransitionState(SpiderStateType.Chase); // 进入追逐状态
-
             }
             else
             {
@@ -188,19 +169,17 @@ public class SpiderP
                 int damage = attackHitbox.damage;
                 TakeDamage(damage);
 
-
-
-
-                if (hero.transform.localRotation.y == 0)
+                if (hero != null)
                 {
-
-                    GetComponent<Enemy>().GetHit(Vector2.right);
-                }
-                else if (hero.transform.localRotation.y == -1)
-                {
-
-                    Debug.Log(hero.transform.localRotation.y);
-                    GetComponent<Enemy>().GetHit(Vector2.left);
+                    if (hero.transform.localRotation.y == 0)
+                    {
+                        GetComponent<Enemy>()?.GetHit(Vector2.right);
+                    }
+                    else if (hero.transform.localRotation.y == -1)
+                    {
+                        Debug.Log(hero.transform.localRotation.y);
+                        GetComponent<Enemy>()?.GetHit(Vector2.left);
+                    }
                 }
             }
             else
@@ -217,38 +196,38 @@ public class SpiderP
         {
             if (parameter.target != null && (distance < parameter.sightArea) || (distance > -parameter.sightArea))
                 TransitionState(SpiderStateType.Chase);
-
             else
             {
                 parameter.target = null;
-
-                TransitionState(SpiderStateType.Patrol); // �˳�ʱ�л���Idle״̬
+                TransitionState(SpiderStateType.Patrol);
             }
         }
     }
     #endregion
 
-
     private void OnDrawGizmos()
     {
         Gizmos.DrawWireSphere(parameter.attackPoint.position, parameter.attackArea);
     }
-    //受到伤害
+
     #region Damage System
     public void TakeDamage(int damage)
     {
-        if (currentHealth <= 0) return; // 已死亡时不再受到伤害
+        if (enemyLife == null || enemyLife.IsDead) return; // 已死亡时不再受到伤害
 
-        int previousHealth = currentHealth;
-        currentHealth -= damage;
         parameter.isHit = true;
 
         // 触发屏幕震动
-        CamaraShakeManager.Instance.CamaraShake(impulseSource);
+        if (impulseSource != null)
+        {
+            CamaraShakeManager.Instance.CamaraShake(impulseSource);
+        }
 
-        // 确保血量不会变为负数
-        currentHealth = Mathf.Max(0, currentHealth);
-        if (currentHealth <= 0)
+        // 使用EnemyLife组件处理伤害
+        enemyLife.TakeDamage(damage);
+        
+        // 检查是否死亡
+        if (enemyLife.IsDead)
         {
             // 死亡状态
             TransitionState(SpiderStateType.Dead);
@@ -259,14 +238,5 @@ public class SpiderP
             TransitionState(SpiderStateType.Hit);
         }
     }
-
-
     #endregion
-
-
-
-
-
-
-
 }

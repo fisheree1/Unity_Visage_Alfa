@@ -37,13 +37,6 @@ public class MomParameter
 public class MomP
 : MonoBehaviour
 {
-    [Header("Mom Health")]
-    [SerializeField] public int maxHealth = 3;
-    [SerializeField] public int currentHealth;
-
-    [Header("Damage Response")]
-    [SerializeField] private float damageFlashDuration = 0.2f;
-
     [Header("Camera Shake Settings")]
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeIntensity = 0.5f;
@@ -53,10 +46,12 @@ public class MomP
     private Color originalColor;
     private Rigidbody2D rb;
     private Collider2D col;
+    private EnemyLife enemyLife; // EnemyLife组件引用
 
-    // Health properties
-    public int CurrentHealth => currentHealth;
-    public int MaxHealth => maxHealth;
+    // Health properties - 现在通过EnemyLife组件获取
+    public int CurrentHealth => enemyLife != null ? enemyLife.CurrentHealth : 0;
+    public int MaxHealth => enemyLife != null ? enemyLife.MaxHealth : 0;
+    public bool IsDead => enemyLife != null ? enemyLife.IsDead : false;
 
     public MomParameter parameter;
     private IState currentState;
@@ -103,6 +98,13 @@ public class MomP
             Debug.Log("Added CapsuleCollider2D to Mom");
         }
 
+        // 获取或添加EnemyLife组件
+        enemyLife = GetComponent<EnemyLife>();
+        if (enemyLife == null)
+        {
+            enemyLife = gameObject.AddComponent<EnemyLife>();
+        }
+
         states.Add(MomStateType.Idle, new MomIdleState(this, parameter));
         states.Add(MomStateType.Patrol, new MomPatrolState(this, parameter));
         states.Add(MomStateType.Attack, new MomAttackState(this, parameter));
@@ -113,8 +115,6 @@ public class MomP
 
         TransitionState(MomStateType.Idle);
 
-        // 初始化血量
-        currentHealth = maxHealth;
         //初始化相机震动源
         impulseSource = GetComponent<CinemachineImpulseSource>();
 
@@ -217,7 +217,7 @@ public class MomP
             {
                 parameter.target = null;
 
-                TransitionState(MomStateType.Patrol); // �˳�ʱ�л���Idle״̬
+                TransitionState(MomStateType.Patrol); // 退出时切换到Idle状态
             }
         }
     }
@@ -232,18 +232,18 @@ public class MomP
     #region Damage System
     public void TakeDamage(int damage)
     {
-        if (currentHealth <= 0) return; // 已死亡时不再受到伤害
+        if (enemyLife == null || enemyLife.IsDead) return; // 已死亡时不再受到伤害
 
-        int previousHealth = currentHealth;
-        currentHealth -= damage;
         parameter.isHit = true;
 
         // 触发屏幕震动
         CamaraShakeManager.Instance.CamaraShake(impulseSource);
 
-        // 确保血量不会变为负数
-        currentHealth = Mathf.Max(0, currentHealth);
-        if (currentHealth <= 0)
+        // 使用EnemyLife组件处理伤害
+        enemyLife.TakeDamage(damage);
+        
+        // 检查是否死亡
+        if (enemyLife.IsDead)
         {
             // 死亡状态
             TransitionState(MomStateType.Dead);

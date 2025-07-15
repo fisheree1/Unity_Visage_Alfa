@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-
 public class MGoBlinAttackState : IState
 {
     private MGoBlinP manager;
@@ -11,9 +10,10 @@ public class MGoBlinAttackState : IState
 
     private bool isInAttackRange = false;
     private bool hasDealtDamage = false;
-    private float damageWindowStart = 0.3f; // 伤害检测窗口开始时间
-    private float damageWindowEnd = 0.7f;   // 伤害检测窗口结束时间
+    private float damageWindowStart = 0.2f; // 伤害检测窗口开始时间 - 提前
+    private float damageWindowEnd = 0.6f;   // 伤害检测窗口结束时间 - 缩短
     private float animStartTime;
+    private bool hasTriggeredNextAttack = false;
 
     public MGoBlinAttackState(MGoBlinP manager, MGoBlinParameter parameter)
     {
@@ -25,8 +25,13 @@ public class MGoBlinAttackState : IState
     {
         parameter.animator.Play("MGoBlin_attack");
         hasDealtDamage = false;
+        hasTriggeredNextAttack = false;
         animStartTime = Time.time;
-        Debug.Log("MGoBlinAttackState: 进入攻击状态");
+        
+        // 增加连击计数
+        manager.IncrementCombo(MGoBlinStateType.Attack);
+        
+        Debug.Log($"MGoBlinAttackState: 进入攻击状态 (连击数: {parameter.currentComboCount})");
     }
 
     public void OnUpdate()
@@ -42,29 +47,84 @@ public class MGoBlinAttackState : IState
         // 处理伤害检测
         HandleDamageDetection(timeSinceStart);
         
+        // 轻微的攻击时移动（更流畅）
+        HandleAttackMovement();
+        
         isInAttackRange = CheckAttackRange();
         info = parameter.animator.GetCurrentAnimatorStateInfo(0);
         
-        // 确保动画真正完成且在攻击范围内才切换到Attack2
+        // 提前判断下一个攻击 - 更流畅的连击
+        if (!hasTriggeredNextAttack && info.normalizedTime >= 0.7f && info.IsName("MGoBlin_attack"))
+        {
+            hasTriggeredNextAttack = true;
+            DecideNextAction();
+        }
+        
+        // 动画完成后的最终状态转换
         if (info.normalizedTime >= 0.95f && info.IsName("MGoBlin_attack"))
         {
-            if (isInAttackRange)
+            if (!hasTriggeredNextAttack)
             {
-                Debug.Log("MGoBlinAttackState: 在攻击范围内，切换到攻击2状态");
-                manager.TransitionState(MGoBlinStateType.Attack2);
+                DecideNextAction();
+            }
+        }
+    }
+    
+    private void DecideNextAction()
+    {
+        // 检查目标是否有效
+        if (!manager.IsTargetValid())
+        {
+            Debug.Log("MGoBlinAttackState: Target invalid, switching to patrol");
+            manager.TransitionState(MGoBlinStateType.Patrol);
+            return;
+        }
+        
+        // 更智能的下一步行动决策
+        if (manager.CanChainAttack() && isInAttackRange)
+        {
+            MGoBlinStateType nextAttack = manager.GetNextAttackType();
+            if (nextAttack != MGoBlinStateType.Chase)
+            {
+                Debug.Log($"MGoBlinAttackState: 链接到 {nextAttack} 状态");
+                manager.TransitionState(nextAttack);
                 return;
             }
-            else
+        }
+        
+        // 如果不能连击或不在攻击范围内
+        if (isInAttackRange && UnityEngine.Random.value < parameter.comboChance * 0.6f)
+        {
+            Debug.Log("MGoBlinAttackState: 在攻击范围内，切换到攻击2状态");
+            manager.TransitionState(MGoBlinStateType.Attack2);
+        }
+        else
+        {
+            Debug.Log("MGoBlinAttackState: 不在攻击范围内，切换到追击状态");
+            manager.TransitionState(MGoBlinStateType.Chase);
+        }
+    }
+    
+    private void HandleAttackMovement()
+    {
+        // 在攻击过程中轻微向目标移动，使攻击更流畅
+        if (manager.IsTargetValid() && !hasDealtDamage)
+        {
+            Vector3 targetDirection = (parameter.target.position - manager.transform.position).normalized;
+            float moveDistance = parameter.aggressiveMovementSpeed * Time.deltaTime * 0.5f;
+            
+            // 只在攻击前半段移动
+            AnimatorStateInfo currentInfo = parameter.animator.GetCurrentAnimatorStateInfo(0);
+            if (currentInfo.normalizedTime < 0.5f)
             {
-                Debug.Log("MGoBlinAttackState: 不在攻击范围内，切换到追击状态");
-                manager.TransitionState(MGoBlinStateType.Chase);
+                manager.transform.position += targetDirection * moveDistance;
             }
         }
     }
     
     private void HandleDamageDetection(float timeSinceStart)
     {
-        // 在伤害检测窗口内检测碰撞
+        // 在伤害检测窗口期间检测碰撞
         if (!hasDealtDamage && timeSinceStart >= damageWindowStart && timeSinceStart <= damageWindowEnd)
         {
             Collider2D hitTarget = Physics2D.OverlapCircle(
@@ -82,7 +142,7 @@ public class MGoBlinAttackState : IState
     
     private void DealDamageToTarget(Collider2D target)
     {
-        // 查找目标的生命值组件
+        // 对目标造成伤害并增加连击
         HeroLife heroLife = target.GetComponent<HeroLife>();
         if (heroLife == null)
         {
@@ -91,12 +151,16 @@ public class MGoBlinAttackState : IState
         
         if (heroLife != null)
         {
-            heroLife.TakeDamage(parameter.damage);
+            // 基于连击数增加伤害
+            int comboBonus = Mathf.FloorToInt(parameter.currentComboCount * 0.5f);
+            int totalDamage = parameter.damage + comboBonus;
+            
+            heroLife.TakeDamage(totalDamage);
             hasDealtDamage = true;
             
-            Debug.Log($"MGoBlin 攻击命中! 造成 {parameter.damage} 伤害");
+            Debug.Log($"MGoBlin 攻击命中! 造成 {totalDamage} 伤害 (连击奖励: {comboBonus})");
             
-            // 给目标施加轻微击退效果
+            // 对目标施加轻微击退效果
             ApplyKnockback(target);
         }
     }
@@ -108,7 +172,7 @@ public class MGoBlinAttackState : IState
         {
             // 计算击退方向
             Vector2 knockbackDirection = (target.transform.position - manager.transform.position).normalized;
-            float knockbackForce = 3f; // 普通攻击的击退力较小
+            float knockbackForce = 2.5f; // 减少击退力度，使连击更流畅
             targetRb.AddForce(knockbackDirection * knockbackForce, ForceMode2D.Impulse);
         }
     }
@@ -116,6 +180,7 @@ public class MGoBlinAttackState : IState
     public void OnExit()
     {
         hasDealtDamage = false;
+        hasTriggeredNextAttack = false;
         Debug.Log("MGoBlinAttackState: 退出攻击状态");
     }
     

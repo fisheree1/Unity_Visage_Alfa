@@ -34,29 +34,21 @@ public class SGoBlinParameter
 
 }
 
-public class SGoBlinP
-: MonoBehaviour
+public class SGoBlinP : MonoBehaviour
 {
-    [Header("SGoBlin Health")]
-    [SerializeField] public int maxHealth = 3;
-    [SerializeField] public int currentHealth;
-
-    [Header("Damage Response")]
-    [SerializeField] private float damageFlashDuration = 0.2f;
-
     [Header("Camera Shake Settings")]
     [SerializeField] private float shakeDuration = 0.15f;
     [SerializeField] private float shakeIntensity = 0.5f;
 
     // Components
-    private SpriteRenderer spriteRenderer;
-    private Color originalColor;
     private Rigidbody2D rb;
     private Collider2D col;
+    private EnemyLife enemyLife;
 
-    // Health properties
-    public int CurrentHealth => currentHealth;
-    public int MaxHealth => maxHealth;
+    // Health properties - 通过EnemyLife组件获取
+    public int CurrentHealth => enemyLife != null ? enemyLife.CurrentHealth : 0;
+    public int MaxHealth => enemyLife != null ? enemyLife.MaxHealth : 0;
+    public bool IsDead => enemyLife != null ? enemyLife.IsDead : false;
 
     public SGoBlinParameter parameter;
     private IState currentState;
@@ -103,6 +95,13 @@ public class SGoBlinP
             Debug.Log("Added CapsuleCollider2D to SGoBlin");
         }
 
+        // 获取或添加EnemyLife组件
+        enemyLife = GetComponent<EnemyLife>();
+        if (enemyLife == null)
+        {
+            enemyLife = gameObject.AddComponent<EnemyLife>();
+        }
+
         states.Add(SGoBlinStateType.Idle, new SGoBlinIdleState(this, parameter));
         states.Add(SGoBlinStateType.Patrol, new SGoBlinPatrolState(this, parameter));
         states.Add(SGoBlinStateType.Attack, new SGoBlinAttackState(this, parameter));
@@ -113,8 +112,6 @@ public class SGoBlinP
 
         TransitionState(SGoBlinStateType.Idle);
 
-        // 初始化血量
-        currentHealth = maxHealth;
         //初始化相机震动源
         impulseSource = GetComponent<CinemachineImpulseSource>();
 
@@ -232,18 +229,21 @@ public class SGoBlinP
     #region Damage System
     public void TakeDamage(int damage)
     {
-        if (currentHealth <= 0) return; // 已死亡时不再受到伤害
+        if (enemyLife == null || enemyLife.IsDead) return; // 已死亡时不再受到伤害
 
-        int previousHealth = currentHealth;
-        currentHealth -= damage;
         parameter.isHit = true;
 
         // 触发屏幕震动
-        CamaraShakeManager.Instance.CamaraShake(impulseSource);
+        if (impulseSource != null)
+        {
+            CamaraShakeManager.Instance.CamaraShake(impulseSource);
+        }
 
-        // 确保血量不会变为负数
-        currentHealth = Mathf.Max(0, currentHealth);
-        if (currentHealth <= 0)
+        // 使用EnemyLife组件处理伤害
+        enemyLife.TakeDamage(damage);
+        
+        // 检查是否死亡
+        if (enemyLife.IsDead)
         {
             // 死亡状态
             TransitionState(SGoBlinStateType.Dead);

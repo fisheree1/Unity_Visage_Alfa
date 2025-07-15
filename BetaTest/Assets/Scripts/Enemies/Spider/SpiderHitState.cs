@@ -29,7 +29,7 @@ public class SpiderHitState : IState
         info = parameter.animator.GetCurrentAnimatorStateInfo(0);
         if (info.normalizedTime >= 0.95f)
         {
-            if (manager.currentHealth <= 0)
+            if (manager.IsDead)
             {
                 manager.TransitionState(SpiderStateType.Dead);
             }

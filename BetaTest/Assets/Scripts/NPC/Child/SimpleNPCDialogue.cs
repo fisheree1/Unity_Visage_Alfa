@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using UnityEngine.Playables;
 
 public class SimpleNPCDialogue : MonoBehaviour
 {
@@ -20,6 +21,8 @@ public class SimpleNPCDialogue : MonoBehaviour
     
     [Header("Dialogue Settings")]
     [SerializeField] private float typingSpeed = 0.05f;
+
+    [SerializeField] private PlayableDirector director;
     
     // State
     private bool playerInRange = false;
@@ -140,27 +143,28 @@ public class SimpleNPCDialogue : MonoBehaviour
         if (interactionUI != null)
             interactionUI.SetActive(false);
     }
-    
-    private void StartDialogue()
+
+    public void StartDialogue()
     {
         isDialogueActive = true;
         currentLineIndex = 0;
-        
+
         HideInteractionUI();
-        
+
         if (dialoguePanel != null)
             dialoguePanel.SetActive(true);
-            
+
         // Disable player movement
         if (playerMovement != null)
             playerMovement.enabled = false;
-            
+
         DisplayCurrentLine();
-        
+
         Debug.Log("Started dialogue with child");
+        director.Pause();
     }
     
-    private void DisplayCurrentLine()
+    public void DisplayCurrentLine()
     {
         if (currentLineIndex >= dialogueLines.Length)
         {
@@ -237,26 +241,27 @@ public class SimpleNPCDialogue : MonoBehaviour
         isTyping = false;
     }
     
-    private void ContinueDialogue()
+    public void ContinueDialogue()
     {
         if (isTyping) return;
         
         currentLineIndex++;
         DisplayCurrentLine();
     }
-    
-    private void EndDialogue()
+
+    public void EndDialogue()
     {
         isDialogueActive = false;
-        
+
         if (dialoguePanel != null)
             dialoguePanel.SetActive(false);
-            
+
         // Restore player movement
         if (playerMovement != null)
             playerMovement.enabled = true;
-            
+
         Debug.Log("Dialogue ended");
+        director.Play();
     }
     
     private void InitializeDialogue()
